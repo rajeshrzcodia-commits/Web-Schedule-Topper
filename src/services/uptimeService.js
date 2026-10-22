@@ -1,18 +1,18 @@
-/**
- * uptimeService.js
- * Resilient HTTP/HTTPS uptime checks using axios + axios-retry.
- *
- * A dedicated axios instance is used so the uptime retry policy never leaks
- * into other HTTP consumers (for example the Google Sheet CSV fetch).
- *
- * Retry behaviour:
- *  - network errors and 5xx responses are retried with exponential backoff;
- *  - request timeouts are NOT retried, so a single target can never consume
- *    timeoutMs multiplied by the retry count.
- *
- * Targets are checked with bounded concurrency so a cycle finishes well
- * inside its cron interval.
- */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 const axios = require('axios');
 const axiosRetry = require('axios-retry').default;
@@ -21,10 +21,10 @@ const { config } = require('../config/env');
 
 const logger = createLogger('uptime');
 
-/**
- * Dedicated client. 5xx responses are rejected so axios-retry can treat them
- * as transient failures; every other status is resolved and evaluated here.
- */
+
+
+
+
 const client = axios.create({
   headers: {
     'User-Agent': 'uptime-monitor/1.0',
@@ -38,21 +38,19 @@ axiosRetry(client, {
   retries: config.scan.maxRetries,
   retryDelay: axiosRetry.exponentialDelay,
   retryCondition: (error) => {
-    // Covers network errors and 5xx responses for idempotent methods.
-    if (axiosRetry.isNetworkOrIdempotentRequestError(error)) return true;
-    // Explicit 5xx check (defensive, in case a custom method is used).
-    if (error.response && error.response.status >= 500) return true;
+        if (axiosRetry.isNetworkOrIdempotentRequestError(error)) return true;
+        if (error.response && error.response.status >= 500) return true;
     return false;
   },
   shouldResetTimeout: true,
 });
 
-/**
- * Perform a single uptime check against a URL.
- * @param {string} url - Target URL.
- * @param {Object} options - { timeoutMs, maxRetries, expectedStatusCode }
- * @returns {Promise<{status, statusCode, responseTimeMs, error}>}
- */
+
+
+
+
+
+
 const checkUrl = async (url, options = {}) => {
   const {
     timeoutMs = config.scan.timeoutMs,
@@ -71,8 +69,7 @@ const checkUrl = async (url, options = {}) => {
     const responseTimeMs = Number(endTime - startTime) / 1_000_000;
     const statusCode = response.status;
 
-    // Determine up/down based on expected status code (default: 2xx).
-    const isSuccess =
+        const isSuccess =
       expectedStatusCode !== undefined && expectedStatusCode !== null
         ? statusCode === expectedStatusCode
         : statusCode >= 200 && statusCode < 300;
@@ -106,12 +103,12 @@ const checkUrl = async (url, options = {}) => {
   }
 };
 
-/**
- * Run uptime checks against an array of targets using bounded concurrency.
- * @param {Array<{name, url, expectedStatusCode?}>} targets
- * @param {Object} options - { timeoutMs, maxRetries, concurrency }
- * @returns {Promise<Array>} results in the same order as `targets`
- */
+
+
+
+
+
+
 const checkTargets = async (targets, options = {}) => {
   const {
     timeoutMs = config.scan.timeoutMs,
@@ -135,13 +132,9 @@ const checkTargets = async (targets, options = {}) => {
           maxRetries,
           expectedStatusCode: target.expectedStatusCode,
         });
-        // Keep the target identity (url, name, expectedStatusCode) alongside
-        // the check outcome.
-        results[index] = { ...target, ...check };
+                        results[index] = { ...target, ...check };
       } catch (error) {
-        // checkUrl handles its own failures; this is a last-resort guard so a
-        // single bad target cannot abort the whole cycle.
-        logger.error(
+                        logger.error(
           `Unexpected error while checking ${target.url}: ${error.message}`
         );
         results[index] = {

@@ -1,12 +1,12 @@
-/**
- * mongoose.js
- * MongoDB connection helper with retry logic and background reconnection.
- *
- * The initial connection is retried with a bounded number of attempts. If the
- * database is still unreachable afterwards the service keeps running (the
- * scheduler falls back to in-memory state) and a background loop keeps
- * retrying so persistence resumes automatically once MongoDB comes back.
- */
+
+
+
+
+
+
+
+
+
 
 const mongoose = require('mongoose');
 const { createLogger } = require('./logger');
@@ -26,8 +26,6 @@ const connectionOptions = {
   socketTimeoutMS: 45000,
 };
 
-// Registered once for the lifetime of the process so a connection dropped
-// after a successful start is also recovered in the background.
 mongoose.connection.on('connected', () => {
   logger.info('MongoDB connection established.');
 });
@@ -39,11 +37,11 @@ mongoose.connection.on('error', (error) => {
   logger.error(`MongoDB connection error: ${error.message}`);
 });
 
-/**
- * Attempt a single connection.
- * @param {string} uri
- * @returns {Promise<boolean>} true when connected
- */
+
+
+
+
+
 const attemptConnect = async (uri) => {
   try {
     await mongoose.connect(uri, connectionOptions);
@@ -55,10 +53,10 @@ const attemptConnect = async (uri) => {
   }
 };
 
-/**
- * Keep retrying in the background until the database becomes reachable.
- * @param {string} uri
- */
+
+
+
+
 const startBackgroundReconnect = (uri) => {
   if (backgroundReconnectTimer || reconnecting) return;
 
@@ -87,11 +85,11 @@ const startBackgroundReconnect = (uri) => {
   if (backgroundReconnectTimer.unref) backgroundReconnectTimer.unref();
 };
 
-/**
- * Connect to MongoDB, retrying a bounded number of times.
- * @param {string} uri
- * @returns {Promise<boolean>} true when connected, false when still unavailable
- */
+
+
+
+
+
 const connectDB = async (uri) => {
   currentUri = uri;
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
@@ -113,9 +111,9 @@ const connectDB = async (uri) => {
   return false;
 };
 
-/**
- * @returns {boolean} true when the driver reports an active connection.
- */
+
+
+
 const isDbConnected = () => mongoose.connection.readyState === 1;
 
 const disconnectDB = async () => {

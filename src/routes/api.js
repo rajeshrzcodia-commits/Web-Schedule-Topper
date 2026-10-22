@@ -1,8 +1,8 @@
-/**
- * api.js
- * Express routes for health checks, target listing, scan results, and
- * on-demand scan triggering.
- */
+
+
+
+
+
 
 const express = require('express');
 const router = express.Router();
@@ -14,11 +14,11 @@ const { triggerManualScan, isRunning } = require('../services/scheduler');
 const MAX_RESULT_LIMIT = 1000;
 const DEFAULT_RESULT_LIMIT = 100;
 
-/**
- * Send an error response without leaking internal details in production.
- * @param {Object} res
- * @param {Error} error
- */
+
+
+
+
+
 const sendError = (res, error) => {
   res.status(500).json({
     error:
@@ -26,18 +26,17 @@ const sendError = (res, error) => {
   });
 };
 
-/**
- * Clamp a user supplied limit into a safe range.
- * @param {*} raw
- * @returns {number}
- */
+
+
+
+
+
 const clampLimit = (raw) => {
   const parsed = parseInt(raw, 10);
   if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_RESULT_LIMIT;
   return Math.min(parsed, MAX_RESULT_LIMIT);
 };
 
-// GET /health/live - liveness probe. Always 200 while the process is running.
 router.get('/health/live', (req, res) => {
   res.status(200).json({
     status: 'ok',
@@ -45,8 +44,6 @@ router.get('/health/live', (req, res) => {
   });
 });
 
-// GET /health - readiness probe. 503 when MongoDB is not connected, so the
-// container is not reported healthy while results cannot be persisted.
 router.get('/health', (req, res) => {
   const dbReady = isDbConnected();
   res.status(dbReady ? 200 : 503).json({
@@ -56,7 +53,6 @@ router.get('/health', (req, res) => {
   });
 });
 
-// GET /api/targets - return the distinct monitored target URLs.
 router.get('/api/targets', async (req, res) => {
   try {
     const targets = await ScanResult.distinct('url');
@@ -66,8 +62,6 @@ router.get('/api/targets', async (req, res) => {
   }
 });
 
-// GET /api/results - return recent scan results.
-// Query: ?url=<url>&limit=<n>
 router.get('/api/results', async (req, res) => {
   try {
     const { url } = req.query;
@@ -83,7 +77,6 @@ router.get('/api/results', async (req, res) => {
   }
 });
 
-// GET /api/results/latest - return the latest result per distinct URL.
 router.get('/api/results/latest', async (req, res) => {
   try {
     const results = await ScanResult.getLatestPerUrl();
@@ -93,8 +86,6 @@ router.get('/api/results/latest', async (req, res) => {
   }
 });
 
-// POST /api/scan - trigger an on-demand scan cycle. Returns immediately; the
-// cycle runs in the background so the request never times out.
 router.post('/api/scan', (req, res) => {
   if (isRunning()) {
     return res
@@ -103,14 +94,29 @@ router.post('/api/scan', (req, res) => {
   }
 
   triggerManualScan(config).catch((error) => {
-    // runScanCycle handles its own errors; this is a safety net.
-    console.error('[api] Manual scan failed:', error.message);
+        console.error('[api] Manual scan failed:', error.message);
   });
 
   return res.status(202).json({ status: 'scan triggered' });
 });
 
-// GET /api/scan/status - scan scheduler status.
+router.post('/api/cron', (req, res) => {
+  // Only allow invocations from Vercel Cron.
+  if (req.get('x-vercel-cron') !== '1') {
+    return res.status(401).json({ error: 'Unauthorized cron request' });
+  }
+
+  if (isRunning()) {
+    return res.status(409).json({ error: 'A scan cycle is already running.' });
+  }
+
+  triggerManualScan(config).catch((error) => {
+    console.error('[cron] Scan cycle failed:', error.message);
+  });
+
+  return res.status(202).json({ status: 'cron scan triggered' });
+});
+
 router.get('/api/scan/status', (req, res) => {
   res.json({
     running: isRunning(),

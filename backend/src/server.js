@@ -1,9 +1,9 @@
-/**
- * server.js
- * Application entry point.
- * Sequence: load config -> connect MongoDB -> start Express server ->
- * initialize scheduler -> handle graceful shutdown.
- */
+
+
+
+
+
+
 
 const app = require('./app');
 const { config } = require('./config/env');
@@ -19,8 +19,7 @@ const SHUTDOWN_TIMEOUT_MS = 10000;
 let server = null;
 
 const start = async () => {
-  // 1. Connect to MongoDB (non-fatal; background retries if unavailable).
-  try {
+    try {
     const connected = await connectDB(config.mongodb.uri);
     if (!connected) {
       logger.warn(
@@ -33,8 +32,7 @@ const start = async () => {
     );
   }
 
-  // 2. Start HTTP server (try configured port, then fallback).
-  const startServer = async (port) => {
+    const startServer = async (port) => {
     return new Promise((resolve, reject) => {
       const s = app.listen(port, () => {
         logger.info(`Listening on port ${port} (env: ${config.nodeEnv})`);
@@ -64,8 +62,7 @@ const start = async () => {
     }
   }
 
-  // 3. Start the periodic scheduler (non-fatal).
-  try {
+    try {
     startScheduler(config);
   } catch (error) {
     logger.error(`Scheduler failed to start: ${error.message}`);
@@ -78,10 +75,10 @@ const start = async () => {
   }
 };
 
-/**
- * Close the HTTP server, forcing it down if it does not drain in time.
- * @returns {Promise<void>}
- */
+
+
+
+
 const closeServer = () =>
   new Promise((resolve) => {
     if (!server) return resolve();
@@ -100,7 +97,6 @@ const closeServer = () =>
     });
   });
 
-// Graceful shutdown handler.
 const shutdown = async (signal) => {
   logger.info(`Received ${signal}. Shutting down gracefully...`);
 
@@ -134,12 +130,10 @@ process.on('SIGINT', () => {
   shutdown('SIGINT');
 });
 
-// Catch unhandled promise rejections to avoid silent crashes.
 process.on('unhandledRejection', (reason) => {
   logger.error(`Unhandled rejection: ${reason}`);
 });
 
-// Start the application.
 start();
 
 module.exports = { app, start };

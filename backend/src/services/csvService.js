@@ -1,11 +1,11 @@
-/**
- * csvService.js
- * Fetches target URLs from a publicly shared Google Sheet via its CSV export
- * URL and parses the rows into clean JSON objects using csv-parser.
- *
- * Expected sheet columns (minimum): url
- * Recommended columns: name, url, expectedStatusCode
- */
+
+
+
+
+
+
+
+
 
 const axios = require('axios');
 const axiosRetry = require('axios-retry').default;
@@ -14,10 +14,10 @@ const { createLogger } = require('../config/logger');
 
 const logger = createLogger('csv');
 
-/**
- * Dedicated client so the CSV fetch has its own retry policy and is not
- * affected by the uptime check configuration.
- */
+
+
+
+
 const client = axios.create({
   headers: {
     Accept: 'text/csv, application/csv, */*',
@@ -34,15 +34,13 @@ axiosRetry(client, {
 
 const IPV4_PATTERN = /^\d{1,3}(\.\d{1,3}){3}$/;
 
-/**
- * Validate a target URL and return a canonical form.
- * @param {string} rawUrl
- * @returns {{valid: boolean, url: string, reason: string}}
- */
+
+
+
+
+
 const validateTargetUrl = (rawUrl) => {
-  // Detect an explicit scheme first so unsupported protocols are rejected
-  // instead of being rewritten into a bogus http URL.
-  const schemeMatch = /^([a-z][a-z0-9+.-]*):\/\//i.exec(rawUrl);
+      const schemeMatch = /^([a-z][a-z0-9+.-]*):\/\//i.exec(rawUrl);
   let candidate;
 
   if (schemeMatch) {
@@ -78,9 +76,7 @@ const validateTargetUrl = (rawUrl) => {
     return { valid: false, url: '', reason: 'missing hostname' };
   }
 
-  // Single-label hosts (e.g. a Docker service name) are allowed, but they are
-  // almost always typos, so warn about them.
-  const isSingleLabel =
+      const isSingleLabel =
     !parsed.hostname.includes('.') &&
     parsed.hostname !== 'localhost' &&
     !IPV4_PATTERN.test(parsed.hostname) &&
@@ -88,19 +84,18 @@ const validateTargetUrl = (rawUrl) => {
 
   return {
     valid: true,
-    // Return the scheme-qualified URL so the HTTP client can always use it.
-    url: candidate,
+        url: candidate,
     reason: isSingleLabel
       ? `hostname "${parsed.hostname}" has no domain suffix`
       : '',
   };
 };
 
-/**
- * Normalize a parsed CSV row into a clean target object.
- * @param {Object} row - Raw csv-parser row object.
- * @returns {Object|null} { name, url, expectedStatusCode }
- */
+
+
+
+
+
 const normalizeRow = (row) => {
   const keys = Object.keys(row || {});
   const get = (candidates) => {
@@ -125,7 +120,7 @@ const normalizeRow = (row) => {
     : undefined;
 
   if (!url) {
-    return null; // Skip rows without a URL.
+    return null; 
   }
 
   const validation = validateTargetUrl(url);
@@ -146,12 +141,12 @@ const normalizeRow = (row) => {
   };
 };
 
-/**
- * Fetch and parse the Google Sheet CSV into an array of target objects.
- * @param {string} csvUrl - Google Sheet /export?format=csv URL.
- * @param {number} timeoutMs - Request timeout in ms.
- * @returns {Promise<Array<{name, url, expectedStatusCode?}>>}
- */
+
+
+
+
+
+
 const fetchTargetsFromCsv = async (csvUrl, timeoutMs = 15000) => {
   if (!csvUrl || !String(csvUrl).trim()) {
     throw new Error(
@@ -183,8 +178,7 @@ const fetchTargetsFromCsv = async (csvUrl, timeoutMs = 15000) => {
         }
       })
       .on('end', () => {
-        // Deduplicate by URL (keep first occurrence).
-        const seen = new Set();
+                const seen = new Set();
         const unique = targets.filter((t) => {
           if (seen.has(t.url)) return false;
           seen.add(t.url);

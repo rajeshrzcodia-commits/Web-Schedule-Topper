@@ -1,14 +1,14 @@
-/**
- * scheduler.js
- * Orchestrates periodic scanning using node-schedule.
- * On each tick: fetch targets from Google Sheet CSV -> run uptime checks ->
- * compute consecutive failures -> persist results -> send email alerts.
- *
- * Persistence and alerting are deliberately independent: if MongoDB is
- * unavailable the cycle still runs and still sends alerts, using an in-memory
- * state cache to track consecutive failures. Persistence resumes automatically
- * once the database reconnects.
- */
+
+
+
+
+
+
+
+
+
+
+
 
 const schedule = require('node-schedule');
 const ScanResult = require('../models/ScanResult');
@@ -23,20 +23,20 @@ const logger = createLogger('scheduler');
 let scheduledJob = null;
 let isRunning = false;
 
-/**
- * In-memory mirror of the last known state per URL. Used as a fallback when
- * MongoDB is unreachable so consecutive-failure counting and alerting keep
- * working.
- * @type {Map<string, {status: string, consecutiveFailures: number, timestamp: Date}>}
- */
+
+
+
+
+
+
 const stateCache = new Map();
 
-/**
- * Return whichever of the two states is more recent.
- * @param {Object|null} a
- * @param {Object|null} b
- * @returns {Object|null}
- */
+
+
+
+
+
+
 const pickNewer = (a, b) => {
   if (!a) return b;
   if (!b) return a;
@@ -45,12 +45,12 @@ const pickNewer = (a, b) => {
   return aTime >= bTime ? a : b;
 };
 
-/**
- * Read the previous state for a URL.
- * Falls back to the in-memory cache whenever MongoDB is unavailable.
- * @param {string} url
- * @returns {Promise<Object|null>}
- */
+
+
+
+
+
+
 const getPreviousState = async (url) => {
   if (isDbConnected()) {
     try {
@@ -65,26 +65,26 @@ const getPreviousState = async (url) => {
   return stateCache.get(url) || null;
 };
 
-/**
- * Compute consecutive failures from the previous state.
- * @param {Object|null} previousState
- * @param {string} status - 'up' or 'down' of current result.
- * @returns {number}
- */
+
+
+
+
+
+
 const computeConsecutiveFailures = (previousState, status) => {
   if (!previousState) return status === 'down' ? 1 : 0;
   if (status === 'down') return (previousState.consecutiveFailures || 0) + 1;
-  return 0; // Recovered: reset counter.
+  return 0; 
 };
 
-/**
- * Determine the alert type for a single result.
- * @param {Object} result
- * @param {Object|null} previousResult
- * @param {number} consecutiveFailures
- * @param {number} threshold
- * @returns {string|null} 'down' | 'threshold' | 'recovered' | null
- */
+
+
+
+
+
+
+
+
 const determineAlertType = (
   result,
   previousResult,
@@ -94,21 +94,17 @@ const determineAlertType = (
   const wasUp = !previousResult || previousResult.status === 'up';
   const isDown = result.status === 'down';
 
-  // Transition: up -> down
-  if (wasUp && isDown) return 'down';
-  // Transition: down -> up (recovery)
-  if (!wasUp && !isDown) return 'recovered';
-  // Threshold crossed while still down. Fires exactly once, when the counter
-  // reaches the configured threshold.
-  if (isDown && consecutiveFailures === threshold) return 'threshold';
+    if (wasUp && isDown) return 'down';
+    if (!wasUp && !isDown) return 'recovered';
+      if (isDown && consecutiveFailures === threshold) return 'threshold';
   return null;
 };
 
-/**
- * Persist a single scan result. Never throws.
- * @param {Object} result
- * @param {number} consecutiveFailures
- */
+
+
+
+
+
 const persistResult = async (result, consecutiveFailures) => {
   if (!isDbConnected()) {
     logger.warn(
@@ -134,11 +130,11 @@ const persistResult = async (result, consecutiveFailures) => {
   }
 };
 
-/**
- * Execute one full scanning cycle.
- * @param {Object} config
- * @returns {Promise<void>}
- */
+
+
+
+
+
 const runScanCycle = async (config) => {
   if (isRunning) {
     logger.warn('Scan cycle already running; skipping this tick.');
@@ -149,8 +145,7 @@ const runScanCycle = async (config) => {
   try {
     logger.info('Starting scan cycle...');
 
-    // 1. Fetch targets from Google Sheet CSV.
-    if (!config.googleSheet || !config.googleSheet.csvUrl) {
+        if (!config.googleSheet || !config.googleSheet.csvUrl) {
       logger.error(
         'GOOGLE_SHEET_CSV_URL is not configured. Set it to a published Google Sheet CSV export URL. Skipping this cycle.'
       );
@@ -171,8 +166,7 @@ const runScanCycle = async (config) => {
       return;
     }
 
-    // 2. Run uptime checks against all targets.
-    const results = await checkTargets(targets, {
+        const results = await checkTargets(targets, {
       timeoutMs: config.scan.timeoutMs,
       maxRetries: config.scan.maxRetries,
       concurrency: config.scan.concurrency,
@@ -181,8 +175,7 @@ const runScanCycle = async (config) => {
 
     const threshold = config.scan.consecutiveFailureThreshold;
 
-    // 3. Persist results and send alerts.
-    for (const result of results) {
+        for (const result of results) {
       try {
         const previousResult = await getPreviousState(result.url);
         const consecutiveFailures = computeConsecutiveFailures(
@@ -192,8 +185,7 @@ const runScanCycle = async (config) => {
 
         await persistResult(result, consecutiveFailures);
 
-        // Always update the in-memory state, even if persistence failed.
-        stateCache.set(result.url, {
+                stateCache.set(result.url, {
           status: result.status,
           consecutiveFailures,
           timestamp: new Date(),
@@ -219,8 +211,7 @@ const runScanCycle = async (config) => {
               `Alert sent (${alertType}) for ${result.name || result.url}`
             );
           } catch (error) {
-            // A failed email must never stop the remaining targets.
-            logger.error(
+                        logger.error(
               `Failed to send "${alertType}" alert for ${
                 result.name || result.url
               }: ${error.message}`
@@ -228,8 +219,7 @@ const runScanCycle = async (config) => {
           }
         }
       } catch (error) {
-        // A failure on one target must never abort the whole cycle.
-        logger.error(
+                logger.error(
           `Error while processing ${result.url}: ${error.message}`
         );
       }
@@ -243,11 +233,11 @@ const runScanCycle = async (config) => {
   }
 };
 
-/**
- * Start the scheduled scanning job.
- * @param {Object} config
- * @returns {Object|null} job reference
- */
+
+
+
+
+
 const startScheduler = (config) => {
   if (scheduledJob) {
     logger.warn('Scheduler already running.');
@@ -265,8 +255,7 @@ const startScheduler = (config) => {
     );
   }
 
-  // Run one cycle immediately on startup, then on the cron schedule.
-  runScanCycle(config);
+    runScanCycle(config);
 
   scheduledJob = schedule.scheduleJob(
     config.scan.intervalCron,
@@ -286,9 +275,9 @@ const startScheduler = (config) => {
   return scheduledJob;
 };
 
-/**
- * Stop the scheduled scanning job.
- */
+
+
+
 const stopScheduler = () => {
   if (scheduledJob) {
     scheduledJob.cancel();
@@ -297,11 +286,11 @@ const stopScheduler = () => {
   }
 };
 
-/**
- * Trigger a manual on-demand scan cycle.
- * @param {Object} config
- * @returns {Promise<void>}
- */
+
+
+
+
+
 const triggerManualScan = (config) => {
   return runScanCycle(config);
 };

@@ -1,9 +1,9 @@
-/**
- * emailService.js
- * Nodemailer SMTP transporter for automated email alerts.
- * Sends alerts when a target goes down (up -> down transition) or when the
- * consecutive failure threshold is reached.
- */
+
+
+
+
+
+
 
 const nodemailer = require('nodemailer');
 const { createLogger } = require('../config/logger');
@@ -12,11 +12,11 @@ const logger = createLogger('email');
 
 let transporter = null;
 
-/**
- * Escape a value for safe interpolation into an HTML document.
- * @param {*} value
- * @returns {string}
- */
+
+
+
+
+
 const escapeHtml = (value) =>
   String(value === null || value === undefined ? '' : value)
     .replace(/&/g, '&amp;')
@@ -25,13 +25,13 @@ const escapeHtml = (value) =>
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 
-/**
- * Render a URL as a safe anchor. Only http(s) links are clickable; anything
- * else is rendered as plain text so a hostile sheet cannot inject a
- * javascript: URL into the email.
- * @param {string} url
- * @returns {string} HTML fragment
- */
+
+
+
+
+
+
+
 const renderUrl = (url) => {
   const safe = escapeHtml(url);
   try {
@@ -40,16 +40,15 @@ const renderUrl = (url) => {
       return `<a href="${safe}">${safe}</a>`;
     }
   } catch (error) {
-    // Not a parsable URL - fall through to plain text.
-  }
+      }
   return safe;
 };
 
-/**
- * Parse the comma separated recipient list.
- * @param {string} to
- * @returns {string[]} valid-looking email addresses
- */
+
+
+
+
+
 const parseRecipients = (to) => {
   if (!to || typeof to !== 'string') return [];
   return to
@@ -59,10 +58,10 @@ const parseRecipients = (to) => {
     .filter((entry) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(entry));
 };
 
-/**
- * Initialize (or re-initialize) the nodemailer transporter from config.
- * @param {Object} smtpConfig - { host, port, secure, user, pass, from }
- */
+
+
+
+
 const createTransporter = (smtpConfig) => {
   transporter = nodemailer.createTransport({
     host: smtpConfig.host,
@@ -80,11 +79,11 @@ const createTransporter = (smtpConfig) => {
   return transporter;
 };
 
-/**
- * Get the transporter, creating it on first use.
- * @param {Object} smtpConfig
- * @returns {import('nodemailer').Transporter}
- */
+
+
+
+
+
 const getTransporter = (smtpConfig) => {
   if (!transporter) {
     return createTransporter(smtpConfig);
@@ -92,12 +91,12 @@ const getTransporter = (smtpConfig) => {
   return transporter;
 };
 
-/**
- * Send an alert email.
- * @param {Object} smtpConfig
- * @param {Object} alert - { type, target, result, previousResult, consecutiveFailures }
- * @returns {Promise<void>}
- */
+
+
+
+
+
+
 const sendAlert = async (smtpConfig, alert) => {
   const recipients = parseRecipients(smtpConfig.to);
   if (recipients.length === 0) {
@@ -121,9 +120,7 @@ const sendAlert = async (smtpConfig, alert) => {
     recovered: `[RECOVERED] Target back UP: ${target.name || target.url}`,
   };
 
-  // Subjects are plain text. Strip line breaks so a crafted target name can
-  // never inject additional mail headers.
-  const subject = (
+      const subject = (
     subjectMap[type] || `[ALERT] ${target.name || target.url}`
   ).replace(/[\r\n]+/g, ' ');
 

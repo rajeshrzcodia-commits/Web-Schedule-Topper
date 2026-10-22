@@ -1,8 +1,8 @@
-/**
- * logger.js
- * Minimal level-aware logger. The active level comes from LOG_LEVEL
- * (error | warn | info | debug) so log verbosity is configurable at runtime.
- */
+
+
+
+
+
 
 const LEVELS = { error: 0, warn: 1, info: 2, debug: 3 };
 

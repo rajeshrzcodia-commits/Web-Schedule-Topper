@@ -1,10 +1,4 @@
-
-
-
-
-
-
-const express = require('express');
+﻿const express = require('express');
 const router = express.Router();
 const ScanResult = require('../models/ScanResult');
 const { isDbConnected } = require('../config/mongoose');
@@ -14,28 +8,34 @@ const { triggerManualScan, isRunning } = require('../services/scheduler');
 const MAX_RESULT_LIMIT = 1000;
 const DEFAULT_RESULT_LIMIT = 100;
 
-
-
-
-
-
 const sendError = (res, error) => {
   res.status(500).json({
-    error:
-      config.nodeEnv === 'production' ? 'Internal server error' : error.message,
+    error: config.nodeEnv === 'production' ? 'Internal server error' : error.message,
   });
 };
-
-
-
-
-
 
 const clampLimit = (raw) => {
   const parsed = parseInt(raw, 10);
   if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_RESULT_LIMIT;
   return Math.min(parsed, MAX_RESULT_LIMIT);
 };
+
+router.get('/', (req, res) => {
+  res.status(200).json({
+    service: 'Web Schedule Topper Backend',
+    status: 'running',
+    endpoints: {
+      health: '/health',
+      live: '/health/live',
+      targets: '/api/targets',
+      results: '/api/results',
+      latest: '/api/results/latest',
+      triggerScan: 'POST /api/scan',
+      cron: 'POST /api/cron (requires x-vercel-cron: 1 header)',
+      scanStatus: '/api/scan/status',
+    },
+  });
+});
 
 router.get('/health/live', (req, res) => {
   res.status(200).json({
@@ -68,7 +68,6 @@ router.get('/api/results', async (req, res) => {
     const limit = clampLimit(req.query.limit);
     const filter = url ? { url } : {};
     const results = await ScanResult.find(filter)
-      .sort({ timestamp: -1 })
       .limit(limit)
       .lean();
     res.json({ count: results.length, results });
@@ -88,16 +87,30 @@ router.get('/api/results/latest', async (req, res) => {
 
 router.post('/api/scan', (req, res) => {
   if (isRunning()) {
-    return res
-      .status(409)
-      .json({ error: 'A scan cycle is already running.' });
+    return res.status(409).json({ error: 'A scan cycle is already running.' });
   }
 
   triggerManualScan(config).catch((error) => {
-        console.error('[api] Manual scan failed:', error.message);
+    console.error('[api] Manual scan failed:', error.message);
   });
 
   return res.status(202).json({ status: 'scan triggered' });
+});
+
+router.post('/api/cron', (req, res) => {
+  if (req.get('x-vercel-cron') !== '1') {
+    return res.status(401).json({ error: 'Unauthorized cron request' });
+  }
+
+  if (isRunning()) {
+    return res.status(409).json({ error: 'A scan cycle is already running.' });
+  }
+
+  triggerManualScan(config).catch((error) => {
+    console.error('[cron] Scan cycle failed:', error.message);
+  });
+
+  return res.status(202).json({ status: 'cron scan triggered' });
 });
 
 router.get('/api/scan/status', (req, res) => {

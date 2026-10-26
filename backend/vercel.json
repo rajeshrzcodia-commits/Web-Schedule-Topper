@@ -1,0 +1,9 @@
+{
+  "version": 2,
+  "crons": [
+    { "path": "/api/cron", "schedule": "0 8 * * *" }
+  ],
+  "routes": [
+    { "src": "/(.*)", "dest": "/api/index.js" }
+  ]
+}

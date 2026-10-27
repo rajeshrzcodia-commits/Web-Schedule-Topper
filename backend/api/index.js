@@ -45,9 +45,12 @@ const connectDB = async () => {
   if (mongoose.connection.readyState === 1) return;
   const uri = process.env.MONGODB_URI;
   if (!uri) {
-    console.error('[vercel] MONGODB_URI is not set');
+    console.error('[vercel] FATAL: MONGODB_URI environment variable is not set');
     return;
   }
+  // Log masked URI for debugging (hide credentials)
+  const masked = uri.replace(/:\/\/([^:]+):([^@]+)@/, '://****:****@');
+  console.log(`[vercel] MONGODB_URI present: ${masked}`);
 
   try {
     await ensureSrvResolution(uri);
@@ -64,12 +67,15 @@ const connectDB = async () => {
     });
   } catch (err) {
     console.error('[vercel] mongoose.connect error:', err.message);
+    throw err;
   }
 
   const connected = await waitForConnection(CONNECT_TIMEOUT_MS);
   if (!connected) {
+    const state = mongoose.connection.readyState;
+    const stateNames = { 0: 'disconnected', 1: 'connected', 2: 'connecting', 3: 'disconnecting' };
     console.error(
-      `[vercel] MongoDB not connected after ${CONNECT_TIMEOUT_MS / 1000}s. readyState=${mongoose.connection.readyState}`
+      `[vercel] MongoDB not connected after ${CONNECT_TIMEOUT_MS / 1000}s. readyState=${state} (${stateNames[state]})`
     );
   } else {
     console.log('[vercel] MongoDB connected.');

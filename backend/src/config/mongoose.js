@@ -22,8 +22,10 @@ let reconnecting = false;
 let currentUri = null;
 
 const connectionOptions = {
-  serverSelectionTimeoutMS: 10000,
+  serverSelectionTimeoutMS: 25000,
   socketTimeoutMS: 45000,
+  connectTimeoutMS: 25000,
+  family: 4,
 };
 
 mongoose.connection.on('connected', () => {
@@ -35,6 +37,12 @@ mongoose.connection.on('disconnected', () => {
 });
 mongoose.connection.on('error', (error) => {
   logger.error(`MongoDB connection error: ${error.message}`);
+});
+mongoose.connection.on('reconnecting', () => {
+  logger.warn('MongoDB reconnecting...');
+});
+mongoose.connection.on('reconnectFailed', () => {
+  logger.error('MongoDB reconnect failed.');
 });
 
 

@@ -1,17 +1,21 @@
 
 
-
-
-
-
-
-
-
-
 const mongoose = require('mongoose');
+const dns = require('dns');
 const { createLogger } = require('./logger');
 
 const logger = createLogger('mongoose');
+
+const ensureSrvResolution = async (uri) => {
+  if (!uri || !uri.startsWith('mongodb+srv://')) return;
+  const host = uri.split('@')[1].split('/')[0].split('?')[0];
+  const ok = await new Promise((resolve) => {
+    dns.resolveSrv(`_mongodb._tcp.${host}`, (err) => resolve(!err));
+  });
+  if (!ok) {
+    dns.setServers(['8.8.8.8', '1.1.1.1']);
+  }
+};
 
 const MAX_RETRIES = 10;
 const RETRY_DELAY_MS = 3000;
@@ -43,6 +47,7 @@ mongoose.connection.on('error', (error) => {
 
 
 const attemptConnect = async (uri) => {
+  await ensureSrvResolution(uri);
   try {
     await mongoose.connect(uri, connectionOptions);
     logger.info(`Connected to MongoDB at ${mongoose.connection.name}`);

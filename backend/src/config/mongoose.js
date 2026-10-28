@@ -1,13 +1,3 @@
-
-
-
-
-
-
-
-
-
-
 const mongoose = require('mongoose');
 const { createLogger } = require('./logger');
 
@@ -45,11 +35,6 @@ mongoose.connection.on('reconnectFailed', () => {
   logger.error('MongoDB reconnect failed.');
 });
 
-
-
-
-
-
 const attemptConnect = async (uri) => {
   try {
     await mongoose.connect(uri, connectionOptions);
@@ -60,10 +45,6 @@ const attemptConnect = async (uri) => {
     return false;
   }
 };
-
-
-
-
 
 const startBackgroundReconnect = (uri) => {
   if (backgroundReconnectTimer || reconnecting) return;
@@ -93,11 +74,6 @@ const startBackgroundReconnect = (uri) => {
   if (backgroundReconnectTimer.unref) backgroundReconnectTimer.unref();
 };
 
-
-
-
-
-
 const connectDB = async (uri) => {
   currentUri = uri;
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
@@ -118,9 +94,6 @@ const connectDB = async (uri) => {
   startBackgroundReconnect(uri);
   return false;
 };
-
-
-
 
 const isDbConnected = () => mongoose.connection.readyState === 1;
 

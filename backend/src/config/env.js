@@ -1,10 +1,3 @@
-
-
-
-
-
-
-
 require('dotenv').config();
 
 const warnMissing = (name) => {
@@ -59,7 +52,7 @@ const config = {
   },
 
   scan: {
-    intervalCron: getString('SCAN_INTERVAL_CRON', '*/5 * * * *'),
+    intervalCron: getString('SCAN_INTERVAL_CRON', '0 */2 * * *'),
     timeoutMs: getNumber('SCAN_TIMEOUT_MS', 10000),
     maxRetries: getNumber('MAX_RETRIES', 3),
     consecutiveFailureThreshold: getNumber('CONSECUTIVE_FAILURES_THRESHOLD', 3),

@@ -1,16 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
 const mongoose = require('mongoose');
 const { config } = require('../config/env');
 
@@ -77,11 +64,6 @@ scanResultSchema.statics.getRecentResults = async function (
     .limit(limit)
     .lean();
 };
-
-
-
-
-
 
 scanResultSchema.statics.getLatestPerUrl = async function () {
   return this.aggregate([

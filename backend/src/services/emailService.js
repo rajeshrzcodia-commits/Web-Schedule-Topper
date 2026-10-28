@@ -1,21 +1,9 @@
-
-
-
-
-
-
-
 const nodemailer = require('nodemailer');
 const { createLogger } = require('../config/logger');
 
 const logger = createLogger('email');
 
 let transporter = null;
-
-
-
-
-
 
 const escapeHtml = (value) =>
   String(value === null || value === undefined ? '' : value)
@@ -24,13 +12,6 @@ const escapeHtml = (value) =>
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
-
-
-
-
-
-
-
 
 const renderUrl = (url) => {
   const safe = escapeHtml(url);
@@ -44,11 +25,6 @@ const renderUrl = (url) => {
   return safe;
 };
 
-
-
-
-
-
 const parseRecipients = (to) => {
   if (!to || typeof to !== 'string') return [];
   return to
@@ -57,10 +33,6 @@ const parseRecipients = (to) => {
     .filter(Boolean)
     .filter((entry) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(entry));
 };
-
-
-
-
 
 const createTransporter = (smtpConfig) => {
   transporter = nodemailer.createTransport({
@@ -79,23 +51,12 @@ const createTransporter = (smtpConfig) => {
   return transporter;
 };
 
-
-
-
-
-
 const getTransporter = (smtpConfig) => {
   if (!transporter) {
     return createTransporter(smtpConfig);
   }
   return transporter;
 };
-
-
-
-
-
-
 
 const sendAlert = async (smtpConfig, alert) => {
   const recipients = parseRecipients(smtpConfig.to);
@@ -122,7 +83,7 @@ const sendAlert = async (smtpConfig, alert) => {
 
       const subject = (
     subjectMap[type] || `[ALERT] ${target.name || target.url}`
-  ).replace(/[\r\n]+/g, ' ');
+  ).replace(/[\r]+/g, ' ');
 
   const previousStatusRow = previousResult
     ? `<tr><td style="font-weight:bold;">Previous Status</td><td>${escapeHtml(

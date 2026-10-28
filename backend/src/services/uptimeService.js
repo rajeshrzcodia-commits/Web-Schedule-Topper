@@ -1,29 +1,9 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 const axios = require('axios');
 const axiosRetry = require('axios-retry').default;
 const { createLogger } = require('../config/logger');
 const { config } = require('../config/env');
 
 const logger = createLogger('uptime');
-
-
-
-
 
 const client = axios.create({
   headers: {
@@ -44,12 +24,6 @@ axiosRetry(client, {
   },
   shouldResetTimeout: true,
 });
-
-
-
-
-
-
 
 const checkUrl = async (url, options = {}) => {
   const {
@@ -102,12 +76,6 @@ const checkUrl = async (url, options = {}) => {
     };
   }
 };
-
-
-
-
-
-
 
 const checkTargets = async (targets, options = {}) => {
   const {

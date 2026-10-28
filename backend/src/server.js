@@ -1,10 +1,3 @@
-
-
-
-
-
-
-
 const app = require('./app');
 const { config } = require('./config/env');
 const { createLogger } = require('./config/logger');
@@ -74,10 +67,6 @@ const start = async () => {
     );
   }
 };
-
-
-
-
 
 const closeServer = () =>
   new Promise((resolve) => {

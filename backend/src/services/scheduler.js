@@ -1,15 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
 const schedule = require('node-schedule');
 const ScanResult = require('../models/ScanResult');
 const { isDbConnected } = require('../config/mongoose');
@@ -23,19 +11,7 @@ const logger = createLogger('scheduler');
 let scheduledJob = null;
 let isRunning = false;
 
-
-
-
-
-
-
 const stateCache = new Map();
-
-
-
-
-
-
 
 const pickNewer = (a, b) => {
   if (!a) return b;
@@ -44,12 +20,6 @@ const pickNewer = (a, b) => {
   const bTime = new Date(b.timestamp || 0).getTime();
   return aTime >= bTime ? a : b;
 };
-
-
-
-
-
-
 
 const getPreviousState = async (url) => {
   if (isDbConnected()) {
@@ -65,25 +35,11 @@ const getPreviousState = async (url) => {
   return stateCache.get(url) || null;
 };
 
-
-
-
-
-
-
 const computeConsecutiveFailures = (previousState, status) => {
   if (!previousState) return status === 'down' ? 1 : 0;
   if (status === 'down') return (previousState.consecutiveFailures || 0) + 1;
   return 0; 
 };
-
-
-
-
-
-
-
-
 
 const determineAlertType = (
   result,
@@ -99,11 +55,6 @@ const determineAlertType = (
       if (isDown && consecutiveFailures === threshold) return 'threshold';
   return null;
 };
-
-
-
-
-
 
 const persistResult = async (result, consecutiveFailures) => {
   if (!isDbConnected()) {
@@ -129,11 +80,6 @@ const persistResult = async (result, consecutiveFailures) => {
     );
   }
 };
-
-
-
-
-
 
 const runScanCycle = async (config) => {
   if (isRunning) {
@@ -233,11 +179,6 @@ const runScanCycle = async (config) => {
   }
 };
 
-
-
-
-
-
 const startScheduler = (config) => {
   if (scheduledJob) {
     logger.warn('Scheduler already running.');
@@ -275,9 +216,6 @@ const startScheduler = (config) => {
   return scheduledJob;
 };
 
-
-
-
 const stopScheduler = () => {
   if (scheduledJob) {
     scheduledJob.cancel();
@@ -285,11 +223,6 @@ const stopScheduler = () => {
     logger.info('Scheduler stopped.');
   }
 };
-
-
-
-
-
 
 const triggerManualScan = (config) => {
   return runScanCycle(config);

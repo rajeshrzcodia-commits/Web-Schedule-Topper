@@ -1,13 +1,3 @@
-
-
-
-
-
-
-
-
-
-
 const crypto = require('crypto');
 const { config } = require('../config/env');
 const { createLogger } = require('../config/logger');
@@ -16,21 +6,12 @@ const logger = createLogger('auth');
 
 const PUBLIC_PATHS = new Set(['/health', '/health/live']);
 
-
-
-
-
-
-
 const safeCompare = (a, b) => {
   const bufA = Buffer.from(String(a));
   const bufB = Buffer.from(String(b));
   if (bufA.length !== bufB.length) return false;
   return crypto.timingSafeEqual(bufA, bufB);
 };
-
-
-
 
 const apiKeyAuth = (req, res, next) => {
   if (!config.apiKey) return next();

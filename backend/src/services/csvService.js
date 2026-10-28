@@ -1,22 +1,9 @@
-
-
-
-
-
-
-
-
-
 const axios = require('axios');
 const axiosRetry = require('axios-retry').default;
 const csv = require('csv-parser');
 const { createLogger } = require('../config/logger');
 
 const logger = createLogger('csv');
-
-
-
-
 
 const client = axios.create({
   headers: {
@@ -33,11 +20,6 @@ axiosRetry(client, {
 });
 
 const IPV4_PATTERN = /^\d{1,3}(\.\d{1,3}){3}$/;
-
-
-
-
-
 
 const validateTargetUrl = (rawUrl) => {
       const schemeMatch = /^([a-z][a-z0-9+.-]*):\/\//i.exec(rawUrl);
@@ -91,11 +73,6 @@ const validateTargetUrl = (rawUrl) => {
   };
 };
 
-
-
-
-
-
 const normalizeRow = (row) => {
   const keys = Object.keys(row || {});
   const get = (candidates) => {
@@ -140,12 +117,6 @@ const normalizeRow = (row) => {
       : expectedStatusCode,
   };
 };
-
-
-
-
-
-
 
 const fetchTargetsFromCsv = async (csvUrl, timeoutMs = 15000) => {
   if (!csvUrl || !String(csvUrl).trim()) {

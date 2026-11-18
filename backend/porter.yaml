@@ -1,0 +1,235 @@
+# -----------------------------------------------------------------------------
+# Porter Manifest — backend-monitoring-system
+# Deploys the Node.js backend to a Porter app server.
+#
+# Prerequisites:
+#   1. Porter installed on the target server (porter install)
+#   2. Docker available on the target server
+#   3. The ecomm.pem RSA private key available as a Porter credential
+#
+# Quick start:
+#   porter create --name backend-monitoring-system --template porter.yaml
+#   porter install --cred ecommPrivateKey=<PEM_CONTENT> --param nodeEnv=production
+# -----------------------------------------------------------------------------
+name: backend-monitoring-system
+description: >
+  Node.js backend uptime monitoring system with scheduling, CSV processing,
+  MongoDB persistence, email alerts, and ecomm RSA private key support.
+version: 1.0.0
+registry: your-registry.io
+
+# -----------------------------------------------------------------------------
+# Build: produce the Docker image from the Dockerfile in this directory.
+# -----------------------------------------------------------------------------
+build:
+  dockerfile: Dockerfile
+  context: .
+
+# -----------------------------------------------------------------------------
+# Parameters: non-sensitive configuration values with defaults.
+# Override at install/upgrade time with --param name=value.
+# -----------------------------------------------------------------------------
+parameters:
+  - name: port
+    type: string
+    default: "3001"
+    description: Application HTTP port.
+  - name: nodeEnv
+    type: string
+    default: production
+    description: Node.js environment (development | production).
+  - name: logLevel
+    type: string
+    default: info
+    description: Log level (error | warn | info | debug).
+  - name: scanIntervalCron
+    type: string
+    default: "0 * * * *"
+    description: Cron expression for the scheduled scan cycle.
+  - name: scanTimeoutMs
+    type: string
+    default: "10000"
+    description: Per-target scan timeout in milliseconds.
+  - name: maxRetries
+    type: string
+    default: "3"
+    description: Maximum retry attempts per scan target.
+  - name: scanConcurrency
+    type: string
+    default: "10"
+    description: Maximum concurrent scan targets.
+  - name: scanRetentionDays
+    type: string
+    default: "30"
+    description: Days to retain scan results.
+  - name: mongodbUri
+    type: string
+    default: mongodb://localhost:27017/monitoring_db
+    description: MongoDB connection URI.
+    sensitive: true
+  - name: googleSheetCsvUrl
+    type: string
+    default: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRlGSZHror7hLxH16vIh-Y5fjCKX5vuP4lfctWUB6tFJqvDXyU-iIkrHZHrpoSu3J3FytEtWSnjeqPG/pub?gid=0&single=true&output=csv"
+    description: Google Sheets public CSV export URL.
+  - name: apiKey
+    type: string
+    default: ""
+    description: Optional API key for request authentication (x-api-key header).
+    sensitive: true
+
+# -----------------------------------------------------------------------------
+# Credentials: sensitive values injected at runtime. Never stored in the bundle.
+# Provide at install/upgrade time with --cred name=value or via a credential
+# set. The ecommPrivateKey credential is mapped to the ECOMM_PRIVATE_KEY env var.
+# -----------------------------------------------------------------------------
+credentials:
+  - name: ecommPrivateKey
+    description: >
+      RSA private key (PEM) for ecomm operations. Provide the full PEM content
+      (including -----BEGIN RSA PRIVATE KEY----- and -----END RSA PRIVATE KEY-----).
+      Injected as the ECOMM_PRIVATE_KEY environment variable.
+    env: ECOMM_PRIVATE_KEY
+    path: /app/ecomm.pem
+  - name: smtpUser
+    env: SMTP_USER
+    description: SMTP username for email alerts.
+  - name: smtpPass
+    env: SMTP_PASS
+    description: SMTP password for email alerts.
+    sensitive: true
+  - name: alertFrom
+    env: ALERT_FROM
+    description: Alert sender email address (e.g. "Uptime Monitor <alerts@example.com>").
+  - name: alertTo
+    env: ALERT_TO
+    description: Alert recipient email address.
+
+# -----------------------------------------------------------------------------
+# Install: run the backend container with all configuration.
+# -----------------------------------------------------------------------------
+install:
+  - exec:
+      description: Run the backend container with all configuration
+      command: docker
+      arguments:
+        - run
+        - -d
+        - --name
+        - backend-monitor
+        - --restart
+        - unless-stopped
+        - -p
+        - 3001:3001
+        - -e
+        - NODE_ENV={{ bundle.parameters.nodeEnv }}
+        - -e
+        - PORT={{ bundle.parameters.port }}
+        - -e
+        - LOG_LEVEL={{ bundle.parameters.logLevel }}
+        - -e
+        - MONGODB_URI={{ bundle.parameters.mongodbUri }}
+        - -e
+        - SCAN_INTERVAL_CRON={{ bundle.parameters.scanIntervalCron }}
+        - -e
+        - SCAN_TIMEOUT_MS={{ bundle.parameters.scanTimeoutMs }}
+        - -e
+        - MAX_RETRIES={{ bundle.parameters.maxRetries }}
+        - -e
+        - SCAN_CONCURRENCY={{ bundle.parameters.scanConcurrency }}
+        - -e
+        - SCAN_RETENTION_DAYS={{ bundle.parameters.scanRetentionDays }}
+        - -e
+        - GOOGLE_SHEET_CSV_URL={{ bundle.parameters.googleSheetCsvUrl }}
+        - -e
+        - API_KEY={{ bundle.parameters.apiKey }}
+        - -e
+        - SMTP_USER={{ bundle.credentials.smtpUser }}
+        - -e
+        - SMTP_PASS={{ bundle.credentials.smtpPass }}
+        - -e
+        - ALERT_FROM={{ bundle.credentials.alertFrom }}
+        - -e
+        - ALERT_TO={{ bundle.credentials.alertTo }}
+        - -e
+        - ECOMM_PRIVATE_KEY={{ bundle.credentials.ecommPrivateKey }}
+
+# -----------------------------------------------------------------------------
+# Upgrade: stop the old container, remove it, then run the new version.
+# -----------------------------------------------------------------------------
+upgrade:
+  - exec:
+      description: Stop the existing backend container (ignore if not running)
+      command: docker
+      arguments:
+        - stop
+        - backend-monitor
+
+  - exec:
+      description: Remove the existing backend container (ignore if absent)
+      command: docker
+      arguments:
+        - rm
+        - backend-monitor
+
+  - exec:
+      description: Run the upgraded backend container
+      command: docker
+      arguments:
+        - run
+        - -d
+        - --name
+        - backend-monitor
+        - --restart
+        - unless-stopped
+        - -p
+        - 3001:3001
+        - -e
+        - NODE_ENV={{ bundle.parameters.nodeEnv }}
+        - -e
+        - PORT={{ bundle.parameters.port }}
+        - -e
+        - LOG_LEVEL={{ bundle.parameters.logLevel }}
+        - -e
+        - MONGODB_URI={{ bundle.parameters.mongodbUri }}
+        - -e
+        - SCAN_INTERVAL_CRON={{ bundle.parameters.scanIntervalCron }}
+        - -e
+        - SCAN_TIMEOUT_MS={{ bundle.parameters.scanTimeoutMs }}
+        - -e
+        - MAX_RETRIES={{ bundle.parameters.maxRetries }}
+        - -e
+        - SCAN_CONCURRENCY={{ bundle.parameters.scanConcurrency }}
+        - -e
+        - SCAN_RETENTION_DAYS={{ bundle.parameters.scanRetentionDays }}
+        - -e
+        - GOOGLE_SHEET_CSV_URL={{ bundle.parameters.googleSheetCsvUrl }}
+        - -e
+        - API_KEY={{ bundle.parameters.apiKey }}
+        - -e
+        - SMTP_USER={{ bundle.credentials.smtpUser }}
+        - -e
+        - SMTP_PASS={{ bundle.credentials.smtpPass }}
+        - -e
+        - ALERT_FROM={{ bundle.credentials.alertFrom }}
+        - -e
+        - ALERT_TO={{ bundle.credentials.alertTo }}
+        - -e
+        - ECOMM_PRIVATE_KEY={{ bundle.credentials.ecommPrivateKey }}
+        - "{{ bundle.registry }}/backend-monitoring-system:{{ bundle.version }}"
+
+# -----------------------------------------------------------------------------
+# Uninstall: stop and remove the backend container.
+# -----------------------------------------------------------------------------
+uninstall:
+  - exec:
+      description: Stop the backend container
+      command: docker
+      arguments:
+        - stop
+        - backend-monitor
+  - exec:
+      description: Remove the backend container
+      command: docker
+      arguments:
+        - rm
+        - backend-monitor

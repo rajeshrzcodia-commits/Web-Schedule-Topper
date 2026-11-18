@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+
+# Environment files (secrets — never commit)
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+.env.*
+*.env
+
+# Secrets / keys
+*.pem
+*.key
+*.secret
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Docker
+.dockerignore

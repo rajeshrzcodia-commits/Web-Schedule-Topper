@@ -18,6 +18,16 @@ RUN npm ci --only=production --ignore-scripts && \
 # Copy application source.
 COPY --chown=nodeuser:nodejs . .
 
+# If an ecomm.pem key file is present in the build context, lock down its
+# permissions so only the non-root application user can read it.
+# NOTE: For production deployments via Porter, prefer injecting the key through
+# the ECOMM_PRIVATE_KEY environment variable (credential) rather than baking
+# the key file into the image. The .dockerignore excludes ecomm.pem by default.
+RUN if [ -f ecomm.pem ]; then \
+      chown nodeuser:nodejs ecomm.pem && \
+      chmod 600 ecomm.pem; \
+    fi
+
 # Switch to non-root user.
 USER nodeuser
 

@@ -1,5 +1,6 @@
 const schedule = require('node-schedule');
 const ScanResult = require('../models/ScanResult');
+const Target = require('../models/Target');
 const { isDbConnected } = require('../config/mongoose');
 const { createLogger } = require('../config/logger');
 const { fetchTargetsFromCsv } = require('./csvService');
@@ -12,6 +13,53 @@ let scheduledJob = null;
 let isRunning = false;
 
 const stateCache = new Map();
+
+const FREQUENCY_MINUTES = {
+  'Every 15 Mins': 15,
+  'Every 30 Mins': 30,
+  'Every Hour': 60,
+  'Every 6 Hours': 360,
+  'Every 12 Hours': 720,
+  Daily: 1440,
+};
+
+const DEFAULT_FREQUENCY_MINUTES = 1440; // Daily
+
+const parseScheduleTime = (scheduleTime = '00:00') => {
+  const match = String(scheduleTime).match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return { hour: 0, minute: 0 };
+  return {
+    hour: Math.min(23, Math.max(0, parseInt(match[1], 10))),
+    minute: Math.min(59, Math.max(0, parseInt(match[2], 10))),
+  };
+};
+
+const isTargetDue = (target, now) => {
+  const intervalMinutes =
+    FREQUENCY_MINUTES[target.frequency] !== undefined
+      ? FREQUENCY_MINUTES[target.frequency]
+      : DEFAULT_FREQUENCY_MINUTES;
+  const { hour, minute } = parseScheduleTime(target.scheduleTime);
+  const last = stateCache.get(target.url);
+  const lastScanTime = last ? new Date(last.timestamp) : null;
+
+  // Never scanned before: always due on first run.
+  if (!lastScanTime) return true;
+
+  const intervalMs = intervalMinutes * 60 * 1000;
+  let nextDue = new Date(lastScanTime.getTime() + intervalMs);
+
+  // Respect the configured time of day: never run before today's scheduleTime.
+  const todayScheduled = new Date(now);
+  todayScheduled.setHours(hour, minute, 0, 0);
+  if (nextDue < todayScheduled) nextDue = todayScheduled;
+
+  return now >= nextDue;
+};
+
+// Cooldown to prevent threshold-alert spam while still re-alerting at/above threshold.
+const ALERT_THRESHOLD_COOLDOWN_MS = 15 * 60 * 1000;
+const thresholdAlertTimestamps = new Map();
 
 const pickNewer = (a, b) => {
   if (!a) return b;
@@ -52,7 +100,7 @@ const determineAlertType = (
 
     if (wasUp && isDown) return 'down';
     if (!wasUp && !isDown) return 'recovered';
-      if (isDown && consecutiveFailures === threshold) return 'threshold';
+      if (isDown && consecutiveFailures >= threshold) return 'threshold';
   return null;
 };
 
@@ -81,7 +129,9 @@ const persistResult = async (result, consecutiveFailures) => {
   }
 };
 
-const runScanCycle = async (config) => {
+const runScanCycle = async (config, options = {}) => {
+  const { manual = false } = options;
+
   if (isRunning) {
     logger.warn('Scan cycle already running; skipping this tick.');
     return;
@@ -91,26 +141,63 @@ const runScanCycle = async (config) => {
   try {
     logger.info('Starting scan cycle...');
 
+    let csvTargets = [];
+    let csvError = null;
+
         if (!config.googleSheet || !config.googleSheet.csvUrl) {
-      logger.error(
-        'GOOGLE_SHEET_CSV_URL is not configured. Set it to a published Google Sheet CSV export URL. Skipping this cycle.'
+      logger.warn(
+        'GOOGLE_SHEET_CSV_URL is not configured. The cycle will continue with database targets only.'
       );
-      return;
+    } else {
+      try {
+        csvTargets = await fetchTargetsFromCsv(config.googleSheet.csvUrl, config.scan.timeoutMs || 15000);
+        logger.info(`Fetched ${csvTargets.length} target(s) from CSV.`);
+      } catch (error) {
+        csvError = error.message;
+        logger.error(`Could not fetch targets from the CSV: ${csvError}`);
+      }
     }
 
-    let targets;
+    // --- Fetch active targets from the Target/Schedule database collection ---
+    let dbTargets = [];
     try {
-      targets = await fetchTargetsFromCsv(config.googleSheet.csvUrl, 15000);
+      const activeTargets = await Target.find({ active: true }).lean();
+      dbTargets = activeTargets.map((t) => ({
+        url: t.url,
+        name: t.name || '',
+        expectedStatusCode: t.expectedStatusCode,
+        alertEmail: t.alertEmail || '',
+        scheduleTime: t.scheduleTime || '00:00',
+        frequency: t.frequency || '',
+        _id: t._id.toString(),
+      }));
+      logger.info(`Fetched ${dbTargets.length} active target(s) from database.`);
     } catch (error) {
-      logger.error(`Could not fetch targets from the CSV: ${error.message}`);
-      return;
+      logger.warn(`Could not fetch active targets from database: ${error.message}`);
     }
-    logger.info(`Fetched ${targets.length} target(s) from CSV.`);
 
-    if (targets.length === 0) {
-      logger.warn('No valid targets found in CSV; nothing to scan.');
+    // --- Combine CSV and database targets, deduplicating by URL ---
+    const allTargets = [...csvTargets, ...dbTargets];
+    const seen = new Set();
+    const uniqueTargets = allTargets.filter((t) => {
+      if (seen.has(t.url)) return false;
+      seen.add(t.url);
+      return true;
+    });
+
+    if (uniqueTargets.length === 0) {
+      if (csvError) {
+        logger.warn('No valid targets found in CSV and no active database targets; nothing to scan.');
+      } else {
+        logger.warn('No valid targets found in CSV; nothing to scan.');
+      }
       return;
     }
+
+    const now = new Date();
+    const targets = manual
+      ? uniqueTargets
+      : uniqueTargets.filter((t) => isTargetDue(t, now));
 
         const results = await checkTargets(targets, {
       timeoutMs: config.scan.timeoutMs,
@@ -144,9 +231,24 @@ const runScanCycle = async (config) => {
           threshold
         );
 
-        if (alertType) {
+        let shouldSendAlert = true;
+        if (alertType === 'threshold') {
+          const nowMs = Date.now();
+          const lastSent = thresholdAlertTimestamps.get(result.url) || 0;
+          if (nowMs - lastSent < ALERT_THRESHOLD_COOLDOWN_MS) {
+            shouldSendAlert = false;
+          } else {
+            thresholdAlertTimestamps.set(result.url, nowMs);
+          }
+        }
+
+        if (alertType && shouldSendAlert) {
           try {
-            await sendAlert(config.smtp, {
+            // Per-target alert email falls back to the global SMTP ALERT_TO when omitted.
+            const targetAlertEmail = result.alertEmail || config.smtp.to;
+            const targetSmtpConfig = { ...config.smtp, to: targetAlertEmail };
+
+            await sendAlert(targetSmtpConfig, {
               type: alertType,
               target: result,
               result,
@@ -225,7 +327,7 @@ const stopScheduler = () => {
 };
 
 const triggerManualScan = (config) => {
-  return runScanCycle(config);
+  return runScanCycle(config, { manual: true });
 };
 
 module.exports = {

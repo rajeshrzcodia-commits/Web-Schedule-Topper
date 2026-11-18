@@ -3,6 +3,7 @@ const { config } = require('./config/env');
 const { createLogger } = require('./config/logger');
 const { connectDB, disconnectDB } = require('./config/mongoose');
 const { startScheduler, stopScheduler } = require('./services/scheduler');
+const { hasPrivateKey, getPrivateKeyPem } = require('./config/keys');
 
 const logger = createLogger('server');
 
@@ -64,6 +65,23 @@ const start = async () => {
   if (!config.googleSheet.csvUrl) {
     logger.warn(
       'GOOGLE_SHEET_CSV_URL is not set. Every scan cycle will be skipped until it is configured.'
+    );
+  }
+
+  // Validate that the ecomm private key is available in production.
+  // In development the key may be optional depending on feature usage.
+  if (config.nodeEnv === 'production' && !hasPrivateKey()) {
+    logger.error(
+      'ECOMM private key is required in production. Set ECOMM_PRIVATE_KEY '
+      + 'environment variable before starting.'
+    );
+    process.exit(1);
+  }
+
+  if (hasPrivateKey()) {
+    const pem = getPrivateKeyPem();
+    logger.info(
+      `Ecomm private key loaded (${pem.length} bytes, source: ${config.ecomm.privateKeyEnv ? 'env' : config.ecomm.privateKeyPath || 'default'}).`
     );
   }
 };

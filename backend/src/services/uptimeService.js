@@ -43,10 +43,11 @@ const checkUrl = async (url, options = {}) => {
     const responseTimeMs = Number(endTime - startTime) / 1_000_000;
     const statusCode = response.status;
 
+        const is2xx = statusCode >= 200 && statusCode < 300;
         const isSuccess =
       expectedStatusCode !== undefined && expectedStatusCode !== null
-        ? statusCode === expectedStatusCode
-        : statusCode >= 200 && statusCode < 300;
+        ? statusCode === expectedStatusCode || is2xx
+        : is2xx;
 
     return {
       status: isSuccess ? 'up' : 'down',

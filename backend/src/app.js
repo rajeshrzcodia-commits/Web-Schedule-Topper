@@ -15,7 +15,12 @@ app.set('trust proxy', 1);
 
 app.use(helmet());
 
-app.use(cors());
+const corsOrigin = process.env.CORS_ORIGIN || 'http://localhost:5001';
+
+app.use(cors({
+  origin: corsOrigin,
+  credentials: false,
+}));
 
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: false }));

@@ -1,0 +1,214 @@
+@import url('https://fonts.googleapis.com/css2?family=Gilroy:wght@400;500;600;700&display=swap');
+
+:root {
+  --bg: #F4F6F8;
+  --card: #FFFFFF;
+  --brand: #127854;
+  --brand-hover: #0e5f40;
+  --ink: #111827;
+  --muted: #6B7280;
+  --border: #E5E7EB;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+.active-schedules-page {
+  padding: 24px;
+}
+
+.active-schedules-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.active-schedules-header-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.active-schedules-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.active-schedules-title {
+  font-family: 'Gilroy', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.5px;
+  margin: 0;
+}
+
+.active-schedules-btn-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 16px;
+  background: var(--brand);
+  border: none;
+  border-radius: 10px;
+  color: #fff;
+  font-family: 'Gilroy', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  white-space: nowrap;
+}
+
+.active-schedules-btn-add:hover {
+  background: var(--brand-hover);
+}
+
+.active-schedules-table-wrap {
+  background: var(--card);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  box-shadow: 0 10px 25px -8px rgba(17, 24, 39, 0.06);
+  padding: 0;
+}
+
+.active-schedules-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.active-schedules-table th {
+  text-align: left;
+  padding: 12px 16px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  background: #FAFAFA;
+  border-bottom: 2px solid var(--border);
+  border-right: 1px solid var(--border);
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.active-schedules-table th:last-child {
+  border-right: none;
+}
+
+.active-schedules-table td {
+  padding: 12px 16px;
+  font-size: 13px;
+  color: var(--ink);
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.active-schedules-table td:last-child {
+  border-right: none;
+}
+
+.active-schedules-table tr:last-child td {
+  border-bottom: none;
+}
+
+.active-schedules-table tr:nth-child(even) td {
+  background: #FCFCFD;
+}
+
+.active-schedules-table tr:hover td {
+  background: #F3F5F7;
+}
+
+.active-schedules-th-id,
+.active-schedules-td-id {
+  width: 40px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.active-schedules-name {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.active-schedules-url {
+  color: var(--muted);
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.active-schedules-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.active-schedules-badge-up {
+  background: #DCFCE7;
+  color: #15803D;
+}
+
+.active-schedules-badge-down {
+  background: #FEE2E2;
+  color: #B91C1C;
+}
+
+.active-schedules-th-actions,
+.active-schedules-td-actions {
+  text-align: center;
+  white-space: nowrap;
+}
+
+.active-schedules-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.15s ease, color 0.15s ease;
+  margin: 0 3px;
+}
+
+.active-schedules-icon-btn:hover {
+  background: #F1F3F5;
+  color: var(--ink);
+}
+
+.active-schedules-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 24px;
+  color: var(--muted);
+}
+
+.active-schedules-empty-text {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+}

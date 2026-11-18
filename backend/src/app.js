@@ -15,7 +15,9 @@ app.set('trust proxy', 1);
 
 app.use(helmet());
 
-const corsOrigin = process.env.CORS_ORIGIN || 'http://localhost:5001';
+const corsOrigin = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',').map((s) => s.trim()).filter(Boolean)
+  : ['http://localhost:5001', 'https://web-schedule-topper.vercel.app'];
 
 app.use(cors({
   origin: corsOrigin,

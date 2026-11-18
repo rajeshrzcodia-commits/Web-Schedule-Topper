@@ -14,6 +14,10 @@ const safeCompare = (a, b) => {
 };
 
 const apiKeyAuth = (req, res, next) => {
+  // Allow CORS preflight (OPTIONS) requests to pass through unauthenticated.
+  // Origin validation is handled by the cors middleware before this runs.
+  if (req.method === 'OPTIONS') return next();
+
   if (!config.apiKey) return next();
   if (PUBLIC_PATHS.has(req.path)) return next();
 

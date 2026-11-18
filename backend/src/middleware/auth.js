@@ -29,3 +29,4 @@ const apiKeyAuth = (req, res, next) => {
 };
 
 module.exports = { apiKeyAuth, safeCompare, PUBLIC_PATHS };
+''

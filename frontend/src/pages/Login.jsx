@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
 import { ApiError } from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import logo from '../assets/Mainlogo.png';
+import logo from '../assets/mainlogo.png';
 import './Auth.css';
 
 export default function Login() {

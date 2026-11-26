@@ -2,9 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import { ROUTES } from '../config/routes';
+import { useAuth } from '../context/AuthContext';
 import './DashboardLayout.css';
-
-const STORAGE_KEY = 'wst_user';
 
 const ROUTE_TITLES = {
   '/dashboard': { title: 'New Check', subtitle: 'Schedule a new uptime check for your website.' },
@@ -20,8 +19,8 @@ const ROUTE_TITLES = {
 export default function DashboardLayout() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user, logout, loading } = useAuth();
   const [open, setOpen] = useState(false);
-  const [user, setUser] = useState(null);
 
   // Isolated global search bar state — dedicated, separate hooks so there is
   // zero cross-field or cross-search state leakage.
@@ -34,13 +33,6 @@ export default function DashboardLayout() {
 
   const routeInfo = ROUTE_TITLES[location.pathname] || { title: 'Dashboard', subtitle: '' };
 
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) setUser(JSON.parse(stored));
-    } catch {}
-  }, []);
-
   // Page-transition safety: never carry search/filter state across routes so
   // switching pages during or after filtering never causes stale filters,
   // blank views, or cross-page filter errors.
@@ -50,45 +42,26 @@ export default function DashboardLayout() {
     setSelectedFilter(null);
   }, [location.pathname]);
 
-  const handleUpdateUser = useCallback(
-    (updates) => {
-      const next = { ...(user || {}), ...updates };
-      setUser(next);
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-      } catch {}
-    },
-    [user]
-  );
-
-  const handleLogout = useCallback(() => {
+  const handleLogout = useCallback(async () => {
     setOpen(false);
-    setUser(null);
-    try {
-      localStorage.removeItem(STORAGE_KEY);
-    } catch {}
-    navigate('/', { replace: true });
-  }, [navigate]);
+    await logout();
+    navigate('/login', { replace: true });
+  }, [logout, navigate]);
 
-  const handleLogin = () => {
-    setOpen(false);
-    navigate('/', { replace: true });
-  };
-
-  const handleClickOutside = (e) => {
+  const handleClickOutside = useCallback((e) => {
     const container = document.querySelector('.dashboard-header');
     const isOutside = container && !container.contains(e.target);
     if (isOutside) {
       setOpen(false);
       setSearchDropdownOpen(false);
     }
-  };
+  }, []);
 
-  const handleKeyDown = (e) => {
+  const handleKeyDown = useCallback((e) => {
     if (e.key === 'Escape') {
       setSearchDropdownOpen(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     document.addEventListener('mousedown', handleClickOutside);
@@ -100,8 +73,34 @@ export default function DashboardLayout() {
   }, [handleClickOutside, handleKeyDown]);
 
   const avatar = user
-    ? user.avatar || (user.name ? user.name.charAt(0).toUpperCase() : 'U')
+    ? user.name ? user.name.charAt(0).toUpperCase() : 'U'
     : '';
+
+  // While auth is still loading, render a minimal shell.
+  if (loading) {
+    return (
+      <div className="dashboard">
+        <aside className="dashboard-sidebar">
+          <Sidebar />
+        </aside>
+        <div className="dashboard-body">
+          <header className="dashboard-header">
+            <div className="dashboard-header-branding">
+              <h1 className="dashboard-title">{routeInfo.title}</h1>
+              {routeInfo.subtitle && (
+                <p className="dashboard-subtitle">{routeInfo.subtitle}</p>
+              )}
+            </div>
+          </header>
+          <main className="dashboard-content">
+            <div style={{ padding: '40px 48px', color: 'var(--muted)', fontSize: 14 }}>
+              Loading session…
+            </div>
+          </main>
+        </div>
+      </div>
+    );
+  }
 
   const handleSearchChange = (e) => {
     const value = e.target.value || '';
@@ -240,7 +239,7 @@ export default function DashboardLayout() {
               <button
                 type="button"
                 className="dashboard-btn-login"
-                onClick={handleLogin}
+                onClick={() => navigate('/login')}
               >
                 Login
               </button>
@@ -271,7 +270,6 @@ export default function DashboardLayout() {
           <Outlet
             context={{
               user,
-              onUpdateUser: handleUpdateUser,
               globalSearchQuery,
               setGlobalSearchQuery,
               searchDropdownOpen,

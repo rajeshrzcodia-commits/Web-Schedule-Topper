@@ -154,6 +154,13 @@
   margin-bottom: 10px;
 }
 
+.edit-profile-error-message {
+  font-size: 14px;
+  font-weight: 600;
+  color: #DC2626;
+  margin-bottom: 10px;
+}
+
 .edit-profile-form-actions {
   display: flex;
   gap: 12px;

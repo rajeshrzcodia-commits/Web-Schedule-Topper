@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
-import { RotateCw, Copy, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { RotateCw, Copy, Printer, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
-import { fetchResults } from '../api/endpoints';
+import { fetchHistory } from '../api/endpoints';
 import { ApiError } from '../api/client';
 import './History.css';
 
@@ -14,12 +14,14 @@ export default function History() {
   const [localSearchQuery, setLocalSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [totalCount, setTotalCount] = useState(0);
+  const historyRequestId = useRef(0);
+
+  const location = useLocation();
 
   useEffect(() => {
     loadHistory();
-  }, []);
-
-  const location = useLocation();
+  }, [location.pathname, currentPage, localSearchQuery]);
 
   // Page-transition safety: reset the isolated History search when navigating
   // so no stale filter state carries across routes. (History never reads the
@@ -29,40 +31,50 @@ export default function History() {
     setCurrentPage(1);
   }, [location.pathname]);
 
-  // Reset to page 1 whenever the isolated History search changes so filtered
-  // results never render on an out-of-range page.
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [localSearchQuery]);
-
   const loadHistory = async () => {
+    const requestId = ++historyRequestId.current;
     setIsLoading(true);
     setError(null);
     try {
-      const data = await fetchResults({ limit: 500 });
-      const results = data.results || [];
+      const data = await fetchHistory({
+        limit: ITEMS_PER_PAGE,
+        skip: (currentPage - 1) * ITEMS_PER_PAGE,
+        search: localSearchQuery.trim(),
+      });
+      if (requestId !== historyRequestId.current) return;
+      const results = data.entries || [];
       setHistory(
         results.map((r) => ({
-          id: r.url + '|' + r.timestamp,
+          id: r._id,
           scheduleName: r.name || r.url,
           status: r.status,
           timestamp: r.timestamp || '-',
-          errorMessage: r.error || '',
+          errorMessage: r.errorMessage || r.error || '',
+          error: r.errorMessage || r.error || '',
           url: r.url,
           statusCode: r.statusCode,
           responseTimeMs: r.responseTimeMs,
+          consecutiveFailures: r.consecutiveFailures,
+          recordType: r.recordType,
+          eventType: r.eventType,
+          emailStatus: r.emailStatus,
+          alertType: r.alertType,
+          recipientCount: r.recipientCount,
         }))
       );
-      setCurrentPage(1);
+      setTotalCount(data.totalCount || 0);
     } catch (err) {
+      if (requestId !== historyRequestId.current) return;
       if (err instanceof ApiError) {
         setError(err.message || 'Failed to load history.');
       } else {
         setError('An unexpected error occurred while loading history.');
       }
+      setHistory([]);
+      setTotalCount(0);
       console.error('Load history failed:', err);
     } finally {
-      setIsLoading(false);
+      if (requestId === historyRequestId.current) setIsLoading(false);
     }
   };
 
@@ -89,9 +101,28 @@ export default function History() {
   };
 
   const handleCopy = (text) => {
-    navigator.clipboard.writeText(text);
-    console.log('Copied log:', text);
+    if (!navigator.clipboard?.writeText) {
+      setError('Clipboard access is unavailable in this browser context.');
+      return;
+    }
+    navigator.clipboard.writeText(text).catch((err) => {
+      setError(`Could not copy log details: ${err.message}`);
+    });
   };
+
+  const formatLog = (log) => [
+    `Record: ${log.recordType === 'email' ? 'Email event' : 'Scan result'}`,
+    `Schedule: ${log.scheduleName}`,
+    `URL: ${log.url || 'N/A'}`,
+    `Timestamp: ${log.timestamp}`,
+    `Status: ${log.recordType === 'email' ? `${log.eventType} ${log.emailStatus}` : log.status}`,
+    `HTTP status: ${log.statusCode ?? 'N/A'}`,
+    `Response time: ${log.responseTimeMs == null ? 'N/A' : `${log.responseTimeMs} ms`}`,
+    `Consecutive failures: ${log.consecutiveFailures ?? 'N/A'}`,
+    `Alert type: ${log.alertType || 'N/A'}`,
+    `Email recipient count: ${log.recipientCount ?? 'N/A'}`,
+    `Error message: ${getErrorMessage(log) || 'No error'}`,
+  ].join('\n');
 
   const handlePrevPage = () => {
     if (currentPage > 1) setCurrentPage((prev) => prev - 1);
@@ -101,24 +132,7 @@ export default function History() {
     if (currentPage < totalPages) setCurrentPage((prev) => prev + 1);
   };
 
-  const filteredHistory = history.filter((h) => {
-    if (!h) return false;
-    const q = (localSearchQuery || '').toLowerCase();
-    // History is filtered by Schedule Name and URL (case-insensitive). It uses
-    // its own isolated localSearchQuery and never reads the top global
-    // search bar state, so the two searches cannot leak into each other.
-    return (
-      String(h.scheduleName || '').toLowerCase().includes(q) ||
-      String(h.url || '').toLowerCase().includes(q)
-    );
-  });
-
-  const totalPages = Math.ceil(filteredHistory.length / ITEMS_PER_PAGE) || 1;
-
-  const paginated = filteredHistory.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
-  );
+  const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE) || 1;
 
   return (
     <div className="history-page">
@@ -129,7 +143,10 @@ export default function History() {
             placeholder="Search history..."
             className="history-search-input"
             value={localSearchQuery}
-            onChange={(e) => setLocalSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setLocalSearchQuery(e.target.value);
+              setCurrentPage(1);
+            }}
           />
         </div>
         <button
@@ -168,16 +185,16 @@ export default function History() {
               </tr>
             </thead>
             <tbody>
-              {paginated.map((h) => (
+              {history.map((h) => (
                 <tr key={h.id}>
                   <td>
                     <div className="history-schedule-name">{h.scheduleName}</div>
                   </td>
                   <td>
                     <span
-                      className={`history-status history-status-${h.status}`}
+                      className={`history-status history-status-${h.recordType === 'email' ? h.emailStatus : h.status}`}
                     >
-                      {h.status.charAt(0).toUpperCase() + h.status.slice(1)}
+                      {h.recordType === 'email' ? `${h.eventType} ${h.emailStatus}` : h.status || 'Unknown'}
                     </span>
                   </td>
                   <td className="history-time">{h.timestamp}</td>
@@ -196,7 +213,7 @@ export default function History() {
               ))}
             </tbody>
           </table>
-          {filteredHistory.length === 0 ? (
+          {history.length === 0 ? (
             <div className="history-empty-state">
               <RotateCw size={30} strokeWidth={2} className="history-empty-icon" />
               <p className="history-empty-text">
@@ -206,9 +223,8 @@ export default function History() {
           ) : (
             <div className="history-pagination">
               <span className="history-pagination-info">
-                Showing {((currentPage - 1) * ITEMS_PER_PAGE) + 1} to{' '}
-                {Math.min(currentPage * ITEMS_PER_PAGE, filteredHistory.length)} of{' '}
-                {filteredHistory.length} entries
+                Showing {totalCount ? ((currentPage - 1) * ITEMS_PER_PAGE) + 1 : 0} to{' '}
+                {Math.min(currentPage * ITEMS_PER_PAGE, totalCount)} of {totalCount} entries
               </span>
               <div className="history-pagination-nav">
                 <button
@@ -239,7 +255,7 @@ export default function History() {
         <div className="history-modal-overlay" onClick={handleCloseModal}>
           <div className="history-modal" onClick={(e) => e.stopPropagation()}>
             <div className="history-modal-header">
-              <h2 className="history-modal-title">Error Log</h2>
+              <h2 className="history-modal-title">Complete Log</h2>
               <button
                 type="button"
                 className="history-modal-close"
@@ -260,34 +276,40 @@ export default function History() {
               </div>
               <div className="history-modal-field">
                 <span className="history-modal-field-label">Status</span>
-                {['active', 'healthy'].includes(String(openLog.status || '').toLowerCase()) ? (
-                  <div className="history-modal-status-active">Active</div>
-                ) : (
-                  <span className="history-modal-field-value">
-                    {String(openLog.status || '').charAt(0).toUpperCase() + String(openLog.status || '').slice(1)}
-                  </span>
-                )}
+                <span className="history-modal-field-value">
+                  {openLog.recordType === 'email' ? `${openLog.eventType} ${openLog.emailStatus}` : openLog.status || 'Unknown'}
+                </span>
               </div>
-              {(() => {
-                const errMsg = getErrorMessage(openLog);
-                if (!errMsg) return null;
-                return (
-                  <div className="history-modal-field">
-                    <span className="history-modal-field-label">Error Message</span>
-                    <div className="history-modal-error-message">
-                      {errMsg}
-                    </div>
-                  </div>
-                );
-              })()}
+              {[
+                ['URL', openLog.url || 'N/A'],
+                ['HTTP Status Code', openLog.statusCode ?? 'N/A'],
+                ['Response Time', openLog.responseTimeMs == null ? 'N/A' : `${openLog.responseTimeMs} ms`],
+                ['Consecutive Failures', openLog.consecutiveFailures ?? 'N/A'],
+                ['Alert Type', openLog.alertType || 'N/A'],
+                ['Email Recipient Count', openLog.recipientCount ?? 'N/A'],
+              ].map(([label, value]) => (
+                <div className="history-modal-field" key={label}>
+                  <span className="history-modal-field-label">{label}</span>
+                  <span className="history-modal-field-value">{value}</span>
+                </div>
+              ))}
+              <div className="history-modal-field">
+                <span className="history-modal-field-label">Error Message</span>
+                <div className="history-modal-error-message">
+                  {getErrorMessage(openLog) || 'No error'}
+                </div>
+              </div>
             </div>
             <div className="history-modal-actions">
               <button
                 type="button"
                 className="history-btn-copy"
-                onClick={() => handleCopy(`${openLog.timestamp} — ${openLog.scheduleName}: ${openLog.errorMessage}`)}
+                onClick={() => handleCopy(formatLog(openLog))}
               >
                 <Copy size={16} strokeWidth={2} /> Copy
+              </button>
+              <button type="button" className="history-btn-copy history-btn-print" onClick={() => window.print()}>
+                <Printer size={16} strokeWidth={2} /> Print
               </button>
               <button
                 type="button"

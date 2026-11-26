@@ -1,25 +1,57 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useOutletContext, useNavigate } from 'react-router-dom';
-import { User, Mail, Phone, Lock, Key, Save, ArrowLeft } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { User, Mail, Lock, Key, Save, ArrowLeft } from 'lucide-react';
 import './EditProfile.css';
 
 export default function EditProfile() {
-  const { user, onUpdateUser } = useOutletContext();
+  const { user } = useOutletContext();
+  const { updateProfile, loading: profileLoading } = useAuth();
   const navigate = useNavigate();
   const [fullName, setFullName] = useState((user && user.name) || '');
-  const [email, setEmail] = useState((user && user.email) || '');
-  const [phone, setPhone] = useState('');
+  const email = user?.email || '';
+  const isGoogleOnly = user?.authProvider === 'google' && !user?.hasPassword;
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
-  const handleSave = (e) => {
-    e.preventDefault();
-    if (onUpdateUser) {
-      onUpdateUser({ ...user, name: fullName, email: email });
+  useEffect(() => {
+    if (user) {
+      setFullName(user.name || '');
     }
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2200);
+  }, [user]);
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    setSaveError('');
+    setSaved(false);
+
+    const updates = {};
+    if (fullName.trim()) updates.name = fullName.trim();
+
+    // Only attempt password change if newPassword is provided.
+    if (newPassword) {
+      if (!currentPassword) {
+        setSaveError('Current password is required to change password.');
+        return;
+      }
+      if (newPassword.length < 6) {
+        setSaveError('New password must be at least 6 characters.');
+        return;
+      }
+      updates.currentPassword = currentPassword;
+      updates.newPassword = newPassword;
+    }
+
+    try {
+      const data = await updateProfile(updates);
+      setFullName(data.user.name || '');
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2200);
+    } catch (err) {
+      setSaveError(err.message || 'Failed to save changes.');
+    }
   };
 
   const handleCancel = () => {
@@ -60,63 +92,57 @@ export default function EditProfile() {
                 placeholder="john.doe@example.com"
                 className="edit-profile-field-input"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                readOnly
+                aria-readonly="true"
               />
             </div>
           </div>
 
-          <div className="edit-profile-field">
-            <label className="edit-profile-field-label">Phone Number</label>
-            <div className="edit-profile-input-wrapper">
-              <span className="edit-profile-input-addon"><Phone size={16} strokeWidth={1.8} /></span>
-              <input
-                type="tel"
-                placeholder="+1 (555) 000-0000"
-                className="edit-profile-field-input"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-              />
-            </div>
-          </div>
+          {!isGoogleOnly && (
+            <>
+              <div className="edit-profile-field">
+                <label className="edit-profile-field-label">Current Password</label>
+                <div className="edit-profile-input-wrapper">
+                  <span className="edit-profile-input-addon"><Lock size={16} strokeWidth={1.8} /></span>
+                  <input
+                    type="password"
+                    placeholder="••••••••"
+                    className="edit-profile-field-input"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                  />
+                </div>
+              </div>
 
-          <div className="edit-profile-field">
-            <label className="edit-profile-field-label">Current Password</label>
-            <div className="edit-profile-input-wrapper">
-              <span className="edit-profile-input-addon"><Lock size={16} strokeWidth={1.8} /></span>
-              <input
-                type="password"
-                placeholder="••••••••"
-                className="edit-profile-field-input"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="edit-profile-field">
-            <label className="edit-profile-field-label">New Password</label>
-            <div className="edit-profile-input-wrapper">
-              <span className="edit-profile-input-addon"><Key size={16} strokeWidth={1.8} /></span>
-              <input
-                type="password"
-                placeholder="••••••••"
-                className="edit-profile-field-input"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-              />
-            </div>
-          </div>
+              <div className="edit-profile-field">
+                <label className="edit-profile-field-label">New Password</label>
+                <div className="edit-profile-input-wrapper">
+                  <span className="edit-profile-input-addon"><Key size={16} strokeWidth={1.8} /></span>
+                  <input
+                    type="password"
+                    placeholder="••••••••"
+                    className="edit-profile-field-input"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                  />
+                </div>
+              </div>
+            </>
+          )}
 
           {saved && (
             <p className="edit-profile-success-message">Changes saved successfully.</p>
+          )}
+          {saveError && (
+            <p className="edit-profile-error-message">{saveError}</p>
           )}
 
           <div className="edit-profile-form-actions">
             <button type="button" className="edit-profile-btn-cancel" onClick={handleCancel}>
               Cancel
             </button>
-            <button type="submit" className="edit-profile-btn-save">
-              <Save size={16} strokeWidth={2} /> Save Changes
+            <button type="submit" className="edit-profile-btn-save" disabled={profileLoading}>
+              {profileLoading ? 'Saving...' : <><Save size={16} strokeWidth={2} /> Save Changes</>}
             </button>
           </div>
         </form>

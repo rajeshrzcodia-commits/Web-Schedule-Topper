@@ -1,11 +1,12 @@
 const schedule = require('node-schedule');
 const ScanResult = require('../models/ScanResult');
+const EmailLog = require('../models/EmailLog');
 const Target = require('../models/Target');
 const { isDbConnected } = require('../config/mongoose');
 const { createLogger } = require('../config/logger');
 const { fetchTargetsFromCsv } = require('./csvService');
 const { checkTargets } = require('./uptimeService');
-const { sendAlert } = require('./emailService');
+const { sendAlert, recordEmailEvent } = require('./emailService');
 
 const logger = createLogger('scheduler');
 
@@ -109,7 +110,7 @@ const persistResult = async (result, consecutiveFailures) => {
     logger.warn(
       'MongoDB is unavailable; skipping persistence for this result. Alerts are still delivered.'
     );
-    return;
+    return null;
   }
   try {
     const scanDoc = new ScanResult({
@@ -122,10 +123,32 @@ const persistResult = async (result, consecutiveFailures) => {
       consecutiveFailures,
     });
     await scanDoc.save();
+    return scanDoc;
   } catch (error) {
     logger.warn(
       `Could not persist scan result for ${result.url}: ${error.message}`
     );
+    // Record a history-visible error entry when DB is connected.
+    if (isDbConnected()) {
+      try {
+        await EmailLog.create({
+          targetId: null,
+          scanResultId: null,
+          targetUrl: result.url,
+          targetName: result.name || '',
+          eventType: 'alert',
+          alertType: 'error',
+          status: 'failed',
+          recipientCount: 0,
+          error: `Persistence failed: ${error.message}`,
+        });
+      } catch (logErr) {
+        logger.warn(
+          `Could not record persistence error to EmailLog for ${result.url}: ${logErr.message}`
+        );
+      }
+    }
+    return null;
   }
 };
 
@@ -155,6 +178,26 @@ const runScanCycle = async (config, options = {}) => {
       } catch (error) {
         csvError = error.message;
         logger.error(`Could not fetch targets from the CSV: ${csvError}`);
+        // Record a history-visible error entry when DB is connected.
+        if (isDbConnected()) {
+          try {
+            await EmailLog.create({
+              targetId: null,
+              scanResultId: null,
+              targetUrl: config.googleSheet.csvUrl || 'csv-source',
+              targetName: 'CSV Import',
+              eventType: 'alert',
+              alertType: 'error',
+              status: 'failed',
+              recipientCount: 0,
+              error: `CSV fetch failed: ${csvError}`,
+            });
+          } catch (logErr) {
+            logger.warn(
+              `Could not record CSV fetch error to EmailLog: ${logErr.message}`
+            );
+          }
+        }
       }
     }
 
@@ -177,13 +220,27 @@ const runScanCycle = async (config, options = {}) => {
     }
 
     // --- Combine CSV and database targets, deduplicating by URL ---
+    // Keep CSV's scan data when URLs overlap, while retaining each distinct
+    // per-target email so URL deduplication cannot suppress recipients.
     const allTargets = [...csvTargets, ...dbTargets];
-    const seen = new Set();
-    const uniqueTargets = allTargets.filter((t) => {
-      if (seen.has(t.url)) return false;
-      seen.add(t.url);
-      return true;
-    });
+    const uniqueTargetsByUrl = new Map();
+    for (const target of allTargets) {
+      const targetAlertEmail =
+        typeof target.alertEmail === 'string' ? target.alertEmail.trim() : '';
+      const existing = uniqueTargetsByUrl.get(target.url);
+      if (!existing) {
+        uniqueTargetsByUrl.set(target.url, {
+          ...target,
+          alertEmails: targetAlertEmail ? [targetAlertEmail] : [],
+        });
+      } else if (
+        targetAlertEmail &&
+        !existing.alertEmails.includes(targetAlertEmail)
+      ) {
+        existing.alertEmails.push(targetAlertEmail);
+      }
+    }
+    const uniqueTargets = [...uniqueTargetsByUrl.values()];
 
     if (uniqueTargets.length === 0) {
       if (csvError) {
@@ -216,7 +273,7 @@ const runScanCycle = async (config, options = {}) => {
           result.status
         );
 
-        await persistResult(result, consecutiveFailures);
+        const persistedResult = await persistResult(result, consecutiveFailures);
 
                 stateCache.set(result.url, {
           status: result.status,
@@ -243,27 +300,53 @@ const runScanCycle = async (config, options = {}) => {
         }
 
         if (alertType && shouldSendAlert) {
-          try {
-            // Per-target alert email falls back to the global SMTP ALERT_TO when omitted.
-            const targetAlertEmail = result.alertEmail || config.smtp.to;
-            const targetSmtpConfig = { ...config.smtp, to: targetAlertEmail };
-
-            await sendAlert(targetSmtpConfig, {
-              type: alertType,
-              target: result,
-              result,
-              previousResult,
-              consecutiveFailures,
-            });
+          const targetAlertEmails = Array.isArray(result.alertEmails)
+            ? result.alertEmails
+            : result.alertEmail && result.alertEmail.trim()
+              ? [result.alertEmail.trim()]
+              : [];
+          // Fall back to ALERT_TO (config.smtp.to) when no per-target alert email is configured.
+          const effectiveAlertEmails =
+            targetAlertEmails.length > 0
+              ? targetAlertEmails
+              : config.smtp.to
+                ? [config.smtp.to]
+                : [];
+          if (effectiveAlertEmails.length === 0) {
             logger.info(
-              `Alert sent (${alertType}) for ${result.name || result.url}`
+              `Alert skipped for ${result.name || result.url}: no alertEmail configured. Down alert email not sent.`
             );
-          } catch (error) {
-                        logger.error(
-              `Failed to send "${alertType}" alert for ${
-                result.name || result.url
-              }: ${error.message}`
-            );
+            await recordEmailEvent({
+              target: result,
+              eventType: 'alert',
+              alertType,
+              status: 'skipped',
+              scanResultId: persistedResult ? persistedResult._id : null,
+            });
+          } else {
+            for (const targetAlertEmail of effectiveAlertEmails) {
+              try {
+                const targetSmtpConfig = {
+                  ...config.smtp,
+                  to: targetAlertEmail,
+                };
+                await sendAlert(targetSmtpConfig, {
+                  type: alertType,
+                  target: result,
+                  result,
+                  previousResult,
+                  consecutiveFailures,
+                  scanResultId: persistedResult ? persistedResult._id : null,
+                });
+                logger.info(
+                  `Alert sent (${alertType}) for ${result.name || result.url}`
+                );
+              } catch (error) {
+                logger.error(
+                  `Failed to send \"${alertType}\" alert for ${result.name || result.url}: ${error.message}`
+                );
+              }
+            }
           }
         }
       } catch (error) {

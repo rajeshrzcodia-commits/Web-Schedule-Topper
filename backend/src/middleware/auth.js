@@ -18,6 +18,9 @@ const apiKeyAuth = (req, res, next) => {
   // Origin validation is handled by the cors middleware before this runs.
   if (req.method === 'OPTIONS') return next();
 
+  // Vercel cron requests authenticate through the route's x-vercel-cron check.
+  if (req.method === 'POST' && req.path === '/api/cron') return next();
+
   if (!config.apiKey) return next();
   if (PUBLIC_PATHS.has(req.path)) return next();
 

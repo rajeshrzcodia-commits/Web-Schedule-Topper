@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { useOutletContext, useNavigate } from 'react-router-dom';
+import { useOutletContext, useLocation } from 'react-router-dom';
 import { Trash2, Clock, RotateCw } from 'lucide-react';
-import { fetchResults } from '../api/endpoints';
+import { fetchResults, deleteDownResult, clearDownResults } from '../api/endpoints';
 import { ApiError } from '../api/client';
 import './DownAlerts.css';
 
@@ -9,43 +9,42 @@ import './DownAlerts.css';
  * DownAlerts - "Down Alerts & Logs" page
  *
  * Design notes:
- * - Entries are populated from the backend /api/results endpoint filtered by status === 'down'.
+ * - Entries are populated from persisted down scan records.
  * - Reuses the dashboard's global `searchQuery` (from Outlet context) for filtering.
- * - "CLEAR LOGS" clears the local displayed list (does not delete backend records).
- * - Individual delete removes the row from the local UI only.
+ * - Clear and row delete operations remove matching database records.
  */
 
 export default function DownAlerts() {
-  const navigate = useNavigate();
+  const location = useLocation();
   const { globalSearchQuery = '' } = useOutletContext() || {};
 
   const [alerts, setAlerts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     loadAlerts();
-  }, []);
+  }, [location.pathname]);
 
   const loadAlerts = async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await fetchResults({ limit: 500 });
+      const data = await fetchResults({ status: 'down', limit: 500 });
       const results = data.results || [];
-      const downResults = results.filter((r) => r.status === 'down');
       setAlerts(
-        downResults.map((r) => ({
-          id: r.url + '|' + r.timestamp,
+        results.map((r) => ({
+          id: r._id,
           timestamp: r.timestamp || '-',
           scheduleName: r.name || r.url,
           failureReason: r.error || `HTTP ${r.statusCode ?? 'N/A'}`,
           status: r.status,
-          severity: r.consecutiveFailures >= 3 ? 'high' : r.consecutiveFailures >= 1 ? 'medium' : 'low',
+          severity: r.consecutiveFailures >= 5 ? 'critical' : r.consecutiveFailures >= 3 ? 'high' : r.consecutiveFailures >= 1 ? 'medium' : 'low',
           url: r.url,
           statusCode: r.statusCode,
           responseTimeMs: r.responseTimeMs,
-          consecutiveFailures: r.consecutiveFailures,
+          consecutiveFailures: r.consecutiveFailures ?? 0,
         }))
       );
     } catch (err) {
@@ -61,11 +60,21 @@ export default function DownAlerts() {
   };
 
   const handleClearLogs = () => {
-    setAlerts([]);
+    setError(null);
+    setIsDeleting(true);
+    clearDownResults()
+      .then(() => setAlerts([]))
+      .catch((err) => setError(err instanceof ApiError ? err.message : 'Could not clear down logs from the database.'))
+      .finally(() => setIsDeleting(false));
   };
 
   const handleDeleteAlert = (id) => {
-    setAlerts((prev) => prev.filter((a) => a.id !== id));
+    setError(null);
+    setIsDeleting(true);
+    deleteDownResult(id)
+      .then(() => setAlerts((prev) => prev.filter((a) => a.id !== id)))
+      .catch((err) => setError(err instanceof ApiError ? err.message : 'Could not delete down log from the database.'))
+      .finally(() => setIsDeleting(false));
   };
 
   const filteredAlerts = alerts.filter((a) => {
@@ -75,6 +84,7 @@ export default function DownAlerts() {
       String(a.id || '').includes(q) ||
       String(a.scheduleName || '').toLowerCase().includes(q) ||
       String(a.failureReason || '').toLowerCase().includes(q) ||
+      String(a.url || '').toLowerCase().includes(q) ||
       String(a.severity || '').toLowerCase().includes(q)
     );
   });
@@ -104,6 +114,7 @@ export default function DownAlerts() {
           type="button"
           className="down-alerts-btn-clear"
           onClick={handleClearLogs}
+          disabled={isLoading || isDeleting}
         >
           <Trash2 size={16} strokeWidth={2} /> CLEAR LOGS
         </button>
@@ -127,6 +138,9 @@ export default function DownAlerts() {
                   <th>Timestamp</th>
                   <th>Schedule Name</th>
                   <th>Failure Reason / Status</th>
+                  <th>HTTP Status</th>
+                  <th>Response Time</th>
+                  <th>Consecutive Failures</th>
                   <th>Severity</th>
                   <th className="down-alerts-th-actions">Actions</th>
                 </tr>
@@ -149,6 +163,9 @@ export default function DownAlerts() {
                         <p className="down-alerts-reason">{a.failureReason}</p>
                       </div>
                     </td>
+                    <td>{a.statusCode ?? 'N/A'}</td>
+                    <td>{a.responseTimeMs == null ? 'N/A' : `${a.responseTimeMs} ms`}</td>
+                    <td>{a.consecutiveFailures ?? 0}</td>
                     <td>
                       <span
                         className={`down-alerts-severity down-alerts-severity-${a.severity}`}
@@ -163,6 +180,7 @@ export default function DownAlerts() {
                         title="Delete"
                         aria-label="Delete"
                         onClick={() => handleDeleteAlert(a.id)}
+                        disabled={isDeleting}
                       >
                         ✕
                       </button>

@@ -34,10 +34,13 @@ export class ApiError extends Error {
 let onUnauthorized = () => {
   if (typeof window === 'undefined') return;
   try {
+    localStorage.removeItem('wst_token');
     localStorage.removeItem('wst_user');
   } catch {}
-  // Redirect to login page; the router will handle the route.
-  window.location.href = '/';
+  // Avoid redirect loops: if already on /login, let the router handle it.
+  if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+    window.location.href = '/login';
+  }
 };
 
 /**
@@ -96,6 +99,16 @@ const createClient = () => {
     // Attach the API key on every request so backend apiKeyAuth middleware accepts it.
     if (API_KEY) {
       headers['x-api-key'] = API_KEY;
+    }
+
+    // Attach Bearer token from localStorage on every request.
+    if (typeof window !== 'undefined') {
+      try {
+        const token = localStorage.getItem('wst_token');
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+      } catch {}
     }
 
     try {

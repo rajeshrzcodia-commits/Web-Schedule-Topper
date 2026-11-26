@@ -42,6 +42,12 @@ const config = {
 
   apiKey: getString('API_KEY'),
 
+  auth: {
+    secret: getString('AUTH_SECRET') || 'wst-dev-fallback-secret-do-not-use-in-production',
+  },
+
+  googleClientId: getString('GOOGLE_CLIENT_ID') || '',
+
   mongodb: {
     uri: getString('MONGODB_URI'),
   },
@@ -79,6 +85,14 @@ const config = {
 if (config.nodeEnv === 'production' && !config.apiKey) {
   const error = new Error(
     '[env] FATAL: API_KEY is not set in production mode. Refusing to start.'
+  );
+  console.error(error.message);
+  throw error;
+}
+
+if (config.nodeEnv === 'production' && !process.env.AUTH_SECRET) {
+  const error = new Error(
+    '[env] FATAL: AUTH_SECRET is not set in production mode. Refusing to start.'
   );
   console.error(error.message);
   throw error;

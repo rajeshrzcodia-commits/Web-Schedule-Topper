@@ -175,6 +175,21 @@
   color: #15803D;
 }
 
+.history-status-sent {
+  background: #DCFCE7;
+  color: #15803D;
+}
+
+.history-status-skipped {
+  background: #FEF3C7;
+  color: #B45309;
+}
+
+.history-status-failed {
+  background: #FEE2E2;
+  color: #B91C1C;
+}
+
 .history-time {
   color: var(--history-muted);
   font-size: 12px;
@@ -456,6 +471,28 @@
 
 .history-btn-close:hover {
   background: var(--history-navy-hover);
+}
+
+@media print {
+  body * { visibility: hidden !important; }
+  .history-modal-overlay, .history-modal-overlay * { visibility: visible !important; }
+  .history-modal-overlay {
+    position: absolute;
+    inset: 0;
+    padding: 0;
+    background: #fff;
+    backdrop-filter: none;
+  }
+  .history-modal {
+    width: 100%;
+    max-width: none;
+    max-height: none;
+    border: 0;
+    box-shadow: none;
+    overflow: visible;
+  }
+  .history-modal-body { overflow: visible; }
+  .history-modal-close, .history-modal-actions { display: none !important; }
 }
 
 @media (max-width: 640px) {

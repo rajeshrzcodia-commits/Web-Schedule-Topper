@@ -26,6 +26,10 @@ const targetSchema = new mongoose.Schema(
       type: String,
       trim: true,
       default: '',
+      validate: {
+        validator: (v) => !v || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v),
+        message: 'alertEmail must be a valid email address',
+      },
     },
     expectedStatusCode: {
       type: Number,

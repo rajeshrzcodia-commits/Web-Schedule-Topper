@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useOutletContext, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Mail, Globe, Calendar, Clock, Play, Save } from 'lucide-react';
 import './NewCheck.css';
 import { createTarget, triggerScan, getScanStatus, fetchLatestResults } from '../api/endpoints';
@@ -27,16 +27,17 @@ const generateTimeOptions = () => {
 const TIME_OPTIONS = generateTimeOptions();
 
 export default function NewCheck() {
-  const { user } = useOutletContext();
   const navigate = useNavigate();
   const [siteUrl, setSiteUrl] = useState('');
   const [scheduleName, setScheduleName] = useState('');
   const [frequency, setFrequency] = useState('Every 15 Mins');
   const [scheduleTime, setScheduleTime] = useState('00:00');
-  const [alertEmail, setAlertEmail] = useState((user && user.email) || '');
+  const [alertEmail, setAlertEmail] = useState('');
 
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
+  const [scanStatus, setScanStatus] = useState('idle');
+  const [confirmationEmail, setConfirmationEmail] = useState(null);
   const [isTesting, setIsTesting] = useState(false);
   const [testError, setTestError] = useState(null);
   const [lastTestResult, setLastTestResult] = useState(null);
@@ -45,6 +46,7 @@ export default function NewCheck() {
     e.preventDefault();
     setIsSaving(true);
     setSaveError(null);
+    setConfirmationEmail(null);
 
     // Strict validation: block submission and navigation if required fields are missing.
     if (!siteUrl || !siteUrl.trim()) {
@@ -69,11 +71,26 @@ export default function NewCheck() {
         active: true,
       };
 
-      await createTarget(payload);
+      const created = await createTarget(payload);
+      setConfirmationEmail(created.confirmationEmail || null);
       setSaveError(null);
       setLastTestResult(null);
       console.log('Target created:', payload);
-      navigate('/dashboard/live-monitor');
+
+      // Poll initial scan status so the user understands why a scan entry
+      // appears shortly after saving. The backend triggers triggerManualScan
+      // (fire-and-forget); persistResult writes the ScanResult after the check.
+      setScanStatus('running');
+      try {
+        await pollScanStatus(30);
+        setScanStatus('completed');
+      } catch {
+        setScanStatus('failed');
+      }
+
+      if (!created.confirmationEmail || created.confirmationEmail.status === 'sent') {
+        navigate('/dashboard/live-monitor');
+      }
     } catch (error) {
       if (error instanceof ApiError) {
         setSaveError(error.message || 'Failed to save target. Please try again.');
@@ -108,7 +125,7 @@ export default function NewCheck() {
       await pollScanStatus();
       const data = await fetchLatestResults();
       const results = data.results || [];
-      const match = results.find((r) => r.url === form.siteUrl.trim());
+      const match = results.find((r) => r.url === siteUrl.trim());
 
       if (match) {
         setLastTestResult({
@@ -121,7 +138,7 @@ export default function NewCheck() {
         });
       } else {
         setLastTestResult({
-          url: form.siteUrl.trim(),
+          url: siteUrl.trim(),
           status: 'unknown',
           statusCode: null,
           responseTimeMs: null,
@@ -251,6 +268,37 @@ export default function NewCheck() {
         {saveError && (
           <p className="error-message" style={{ marginTop: '8px', color: '#DC2626', fontSize: '12px' }}>
             {saveError}
+          </p>
+        )}
+        {scanStatus === 'running' && (
+          <p style={{ marginTop: '8px', color: '#2563EB', fontSize: '12px', fontStyle: 'italic' }}>
+            Initial scan running\u2026 results will appear in Live Monitor shortly.
+          </p>
+        )}
+        {scanStatus === 'failed' && (
+          <p style={{ marginTop: '8px', color: '#DC2626', fontSize: '12px', fontStyle: 'italic' }}>
+            Initial scan did not complete in time. Results may still appear in Live Monitor.
+          </p>
+        )}
+        {confirmationEmail && (
+          <p
+            role="status"
+            aria-live="polite"
+            style={{
+              marginTop: '8px',
+              color: confirmationEmail.status === 'sent'
+                ? '#16A34A'
+                : confirmationEmail.status === 'skipped'
+                  ? '#6B7280'
+                  : '#DC2626',
+              fontSize: '12px',
+            }}
+          >
+            {confirmationEmail.status === 'sent'
+              ? `Confirmation email sent to ${confirmationEmail.to}.`
+              : confirmationEmail.status === 'skipped'
+                ? `Confirmation email skipped: ${confirmationEmail.error}`
+                : `Confirmation email failed for ${confirmationEmail.to}: ${confirmationEmail.error}`}
           </p>
         )}
 

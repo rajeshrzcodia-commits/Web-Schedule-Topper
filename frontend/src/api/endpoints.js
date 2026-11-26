@@ -50,10 +50,26 @@ export const deleteTarget = (id) => apiClient.delete(`/api/targets/${id}`);
 export const fetchResults = (params = {}) => {
   const query = new URLSearchParams();
   if (params.url) query.set('url', params.url);
+  if (params.status) query.set('status', params.status);
   if (params.limit) query.set('limit', String(params.limit));
+  if (params.skip !== undefined) query.set('skip', String(params.skip));
   const qs = query.toString() ? `?${query.toString()}` : '';
   return apiClient.get(`/api/results${qs}`);
 };
+
+/** List paginated scan and email event history. */
+export const fetchHistory = (params = {}) => {
+  const query = new URLSearchParams();
+  if (params.search) query.set('search', params.search);
+  if (params.limit) query.set('limit', String(params.limit));
+  if (params.skip !== undefined) query.set('skip', String(params.skip));
+  const qs = query.toString() ? `?${query.toString()}` : '';
+  return apiClient.get(`/api/history${qs}`);
+};
+
+/** Permanently delete down scan records and their linked email logs. */
+export const deleteDownResult = (id) => apiClient.delete(`/api/results/${id}`);
+export const clearDownResults = () => apiClient.delete('/api/results/down');
 
 /** Get the latest result per monitored URL. */
 export const fetchLatestResults = () => apiClient.get('/api/results/latest');
@@ -67,3 +83,25 @@ export const triggerScan = () => apiClient.post('/api/scan');
 
 /** Get current scan status (running / interval cron). */
 export const getScanStatus = () => apiClient.get('/api/scan/status');
+
+// ---------------------------------------------------------------------------
+// Auth
+// ---------------------------------------------------------------------------
+
+/** Register a new user (email/password). */
+export const registerUser = (payload) => apiClient.post('/api/auth/register', payload);
+
+/** Login with email/password. */
+export const loginUser = (payload) => apiClient.post('/api/auth/login', payload);
+
+/** Login with Google ID token (credential). */
+export const loginWithGoogle = (payload) => apiClient.post('/api/auth/google', payload);
+
+/** Get current authenticated user (protected). */
+export const fetchCurrentUser = () => apiClient.get('/api/auth/me');
+
+/** Update user profile (protected). */
+export const updateUserProfile = (payload) => apiClient.put('/api/auth/profile', payload);
+
+/** Logout (clears session on server). */
+export const logoutUser = () => apiClient.post('/api/auth/logout');

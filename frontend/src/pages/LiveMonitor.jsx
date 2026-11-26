@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useOutletContext } from 'react-router-dom';
+import { useNavigate, useOutletContext, useLocation } from 'react-router-dom';
 import { Activity, Clock, ChevronDown } from 'lucide-react';
 import { fetchTargets, fetchLatestResults, triggerScan, getScanStatus } from '../api/endpoints';
 import { ApiError } from '../api/client';
@@ -8,6 +8,7 @@ import './LiveMonitor.css';
 
 export default function LiveMonitor() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [monitors, setMonitors] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -21,7 +22,7 @@ export default function LiveMonitor() {
 
   useEffect(() => {
     loadLatest();
-  }, []);
+  }, [location.pathname]);
 
   // Page-transition safety: reset availableSchedules on unmount so stale
   // items never carry over to other pages.
@@ -39,30 +40,50 @@ export default function LiveMonitor() {
         fetchTargets(),
         fetchLatestResults(),
       ]);
+      const targets = targetsData.targets || [];
       const results = resultsData.results || [];
-      // Build a URL -> Schedule Name lookup from the saved targets so the
-      // Live Monitor always shows the exact Schedule Name entered by the user.
-      const scheduleNameByUrl = {};
-      (targetsData.targets || []).forEach((t) => {
-        if (t.url) scheduleNameByUrl[t.url] = t.name;
+
+      // Build a URL -> latest scan result lookup so each target row shows
+      // scan details when a scan has run, or a clean "not scanned yet" entry
+      // for targets that have never been scanned.
+      const resultByUrl = {};
+      results.forEach((r) => {
+        if (r.url) resultByUrl[r.url] = r;
       });
+
+      // Newest-first order with a safe createdAt fallback so sorting
+      // never produces NaN and the newest-stored entry stands first.
+      const orderedTargets = [...targets].sort((a, b) => {
+        const at = Date.parse(a.createdAt) || 0;
+        const bt = Date.parse(b.createdAt) || 0;
+        return bt - at;
+      });
+
       setMonitors(
-        results.map((r) => ({
-          id: r.url,
-          name: scheduleNameByUrl[r.url] || r.name || 'Unknown Monitor',
-          url: r.url,
-          status: r.status,
-          response: r.responseTimeMs !== null ? `${r.responseTimeMs} ms` : '-',
-          lastChecked: r.timestamp || '-',
-        }))
+        orderedTargets.map((t) => {
+          const r = resultByUrl[t.url];
+          return {
+            id: t._id || t.url,
+            name: t.name || 'Unknown Monitor',
+            url: t.url,
+            status: r ? r.status : 'pending',
+            response:
+              r && r.responseTimeMs !== null ? `${r.responseTimeMs} ms` : '-',
+            lastChecked: r ? (r.timestamp || '-') : '-',
+            frequency: t.frequency || '-',
+            active: t.active,
+            createdAt: t.createdAt,
+          };
+        })
       );
+
       // Populate availableSchedules for the global search dropdown so monitor
       // names/URLs can be searched from the top bar on any page.
       setAvailableSchedules?.(
-        results.map((r) => ({
-          id: r.url,
-          name: scheduleNameByUrl[r.url] || r.name || 'Unknown Monitor',
-          url: r.url,
+        orderedTargets.map((t) => ({
+          id: t._id || t.url,
+          name: t.name || 'Unknown Monitor',
+          url: t.url,
         }))
       );
     } catch (err) {
@@ -106,7 +127,11 @@ export default function LiveMonitor() {
     }
   };
 
-  const statusLabel = (status) => (status === 'up' ? 'Operational' : 'Down');
+  const statusLabel = (status) => {
+    if (status === 'up') return 'Operational';
+    if (status === 'down') return 'Down';
+    return 'Not scanned yet';
+  };
 
   const filteredMonitors = monitors.filter((m) => {
     if (!m) return false;

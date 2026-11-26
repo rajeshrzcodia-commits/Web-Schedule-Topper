@@ -6,6 +6,7 @@ const { config } = require('./config/env');
 const { createLogger } = require('./config/logger');
 const { apiKeyAuth } = require('./middleware/auth');
 const apiRoutes = require('./routes/api');
+const authRoutes = require('./routes/auth');
 
 const logger = createLogger('app');
 
@@ -18,6 +19,10 @@ app.use(helmet());
 const corsOrigin = process.env.CORS_ORIGIN
   ? process.env.CORS_ORIGIN.split(',').map((s) => s.trim()).filter(Boolean)
   : ['http://localhost:5001', 'https://web-schedule-topper.vercel.app'];
+const frontendUrl = process.env.FRONTEND_URL;
+if (frontendUrl && !corsOrigin.includes(frontendUrl)) {
+  corsOrigin.push(frontendUrl);
+}
 
 app.use(cors({
   origin: corsOrigin,
@@ -33,6 +38,7 @@ app.use(morgan(morganFormat));
 
 app.use(apiKeyAuth);
 
+app.use('/api/auth', authRoutes);
 app.use('/', apiRoutes);
 
 app.use((req, res) => {

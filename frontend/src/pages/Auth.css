@@ -105,14 +105,15 @@
   gap: 16px;
 }
 
-.login-logo { 
+.login-logo {
   width: 170px;
   height: auto;
   object-fit: contain;
   display: block;
   margin: 0 auto 12px;
   background: transparent !important;
-  background-color: transparent !important }
+  background-color: transparent !important;
+}
 .login-title { font-size: 26px; font-weight: 700; color: var(--ink); letter-spacing: -0.5px; margin-bottom: 4px; }
 .login-subtitle { font-size: 16px; font-weight: 700; color: var(--ink); margin-bottom: 8px; }
 

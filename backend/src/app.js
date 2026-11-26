@@ -18,7 +18,7 @@ app.use(helmet());
 
 const corsOrigin = process.env.CORS_ORIGIN
   ? process.env.CORS_ORIGIN.split(',').map((s) => s.trim()).filter(Boolean)
-  : ['http://localhost:5001', 'https://web-schedule-topper.vercel.app'];
+  : ['http://localhost:5001', 'https://web-schedule-topper-app.vercel.app'];
 const frontendUrl = process.env.FRONTEND_URL;
 if (frontendUrl && !corsOrigin.includes(frontendUrl)) {
   corsOrigin.push(frontendUrl);
